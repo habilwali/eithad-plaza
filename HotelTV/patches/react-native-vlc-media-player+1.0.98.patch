@@ -1,0 +1,34 @@
+diff --git a/node_modules/react-native-vlc-media-player/android/src/main/java/com/yuanzhou/vlc/vlcplayer/ReactVlcPlayerView.java b/node_modules/react-native-vlc-media-player/android/src/main/java/com/yuanzhou/vlc/vlcplayer/ReactVlcPlayerView.java
+index 8c7acdf..c8aa3e6 100644
+--- a/node_modules/react-native-vlc-media-player/android/src/main/java/com/yuanzhou/vlc/vlcplayer/ReactVlcPlayerView.java
++++ b/node_modules/react-native-vlc-media-player/android/src/main/java/com/yuanzhou/vlc/vlcplayer/ReactVlcPlayerView.java
+@@ -133,16 +133,20 @@ class ReactVlcPlayerView extends TextureView implements
+ 
+     @Override
+     public void onHostPause() {
+-        if (!isPaused && mMediaPlayer != null) {
+-            isPaused = true;
+-            isHostPaused = true;
+-            mMediaPlayer.pause();
+-            // this.getHolder().setKeepScreenOn(false);
+-            WritableMap map = Arguments.createMap();
+-            map.putString("type", "Paused");
+-            eventEmitter.onVideoStateChange(map);
++        try {
++            if (!isPaused && mMediaPlayer != null) {
++                isPaused = true;
++                isHostPaused = true;
++                mMediaPlayer.pause();
++                // this.getHolder().setKeepScreenOn(false);
++                WritableMap map = Arguments.createMap();
++                map.putString("type", "Paused");
++                eventEmitter.onVideoStateChange(map);
++            }
++            Log.i("onHostPause", "---------onHostPause------------>");
++        } catch (Exception e) {
++            Log.w(TAG, "onHostPause: VLCObject may be released - " + e.getMessage());
+         }
+-        Log.i("onHostPause", "---------onHostPause------------>");
+     }
+ 
+ 
