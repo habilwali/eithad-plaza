@@ -16,7 +16,6 @@ import React, {useState, useRef, useEffect, useCallback, useMemo} from 'react';
 import {
   View,
   Text,
-  Image,
   ScrollView,
   TouchableOpacity,
   StyleSheet,
@@ -26,6 +25,8 @@ import {
   Platform,
   ActivityIndicator,
 } from 'react-native';
+import FastImage from 'react-native-fast-image';
+import RetryImage from '../utils/RetryImage';
 import LinearGradient from 'react-native-linear-gradient';
 import {FontFamily} from '../theme/typography';
 import {Colors} from '../theme/colors';
@@ -34,10 +35,12 @@ import {
   type EtihadPlazaGalleryItem,
   type EtihadPlazaHome,
 } from '../services/etihadPlazaApi';
+import { AppHeader } from '../components/common/AppHeader';
+import { useAppHeaderClock } from '../hooks/useAppHeaderClock';
 
 const {width: SW, height: SH} = Dimensions.get('window');
 
-/* ─── THEME (Etihad brand — primary gold ~50%, Midnight Dune ~30%) ─────────── */
+/* ─── THEME (Etihad brand — primary gold #B08747 for borders, CTAs, accents) ─ */
 const C = {
   bg: Colors.background.dark,
   surface: Colors.midnightDune[600],
@@ -46,10 +49,12 @@ const C = {
   goldLight: Colors.primaryLight,
   text: Colors.text.light,
   muted: Colors.jebelGrey[300],
-  border: Colors.overlay.gold[15],
+  /** Card / nav rules — primary gold tint */
+  border: Colors.overlay.gold[20],
   borderHi: Colors.overlay.gold[75],
   focusBg: Colors.overlay.gold[10],
-  sep: Colors.overlay.white[7],
+  /** Dividers (stats, room cards) — primary gold, not neutral grey */
+  sep: Colors.overlay.gold[18],
   green: Colors.saadiyatBlue[400],
 };
 
@@ -96,7 +101,7 @@ function FullScreenView({item}: {item: EtihadPlazaGalleryItem | null}) {
   }
   return (
     <View style={s.fsOverlay} pointerEvents="none">
-      <Image source={{uri: item.img}} style={s.fsImg} resizeMode="cover" />
+      <FastImage source={{uri: item.img, priority: FastImage.priority.normal, cache: FastImage.cacheControl.immutable}} style={s.fsImg} resizeMode={FastImage.resizeMode.cover} />
       <LinearGradient
         colors={['transparent', 'transparent', Colors.overlay.midnight[96]]}
         locations={[0, 0.45, 1]}
@@ -114,6 +119,7 @@ export default function EtihadPlazaScreen({
   onBack,
   isActive = false,
 }: EtihadPlazaScreenProps) {
+  const headerClock = useAppHeaderClock();
   const [section, setSection] = useState<Section>('hero');
   const [_navIdx, setNavIdx] = useState(0);
   const [heroBtnIdx, setHeroBtnIdx] = useState(0);
@@ -379,8 +385,14 @@ export default function EtihadPlazaScreen({
   if (showError) {
     return (
       <View style={s.root}>
-        <StatusBar barStyle="light-content" backgroundColor={C.bg} />
-        <View style={s.loadingOverlay}>
+        <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
+        <AppHeader
+          date={headerClock.date}
+          time={headerClock.time}
+          temperature={headerClock.temperature}
+          weatherCondition={headerClock.weatherCondition}
+        />
+        <View style={s.loadingOverlayBody}>
           <Text style={s.errorStateTitle}>Unable to load Etihad Plaza</Text>
           <Text style={s.errorStateBody}>{errorMsg || 'Unknown error'}</Text>
           <TouchableOpacity
@@ -397,8 +409,14 @@ export default function EtihadPlazaScreen({
   if (showFullLoader) {
     return (
       <View style={s.root}>
-        <StatusBar barStyle="light-content" backgroundColor={C.bg} />
-        <View style={s.loadingOverlay}>
+        <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
+        <AppHeader
+          date={headerClock.date}
+          time={headerClock.time}
+          temperature={headerClock.temperature}
+          weatherCondition={headerClock.weatherCondition}
+        />
+        <View style={s.loadingOverlayBody}>
           <ActivityIndicator size="large" color={C.gold} />
           <Text style={s.loadingHint}>Loading plaza…</Text>
         </View>
@@ -412,7 +430,7 @@ export default function EtihadPlazaScreen({
 
   return (
     <View style={s.root}>
-      <StatusBar barStyle="light-content" backgroundColor={C.bg} />
+      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
 
       <FullScreenView item={fullScreen} />
 
@@ -420,38 +438,15 @@ export default function EtihadPlazaScreen({
         ref={mainRef}
         scrollEnabled={false}
         showsVerticalScrollIndicator={false}
+        scrollEventThrottle={16}
         contentContainerStyle={{paddingBottom: 60}}
         style={{flex: 1}}>
-        {/* NAV */}
-        <View style={[s.nav, section === 'nav' && s.navFocused]}>
-          <View style={s.navBrand}>
-            <Image
-              source={require('../assets/images/ethiad-logo-marketing.png')}
-              style={s.navLogo}
-              resizeMode="contain"
-            />
-          </View>
-
-          {/* <View style={s.navLinks}>
-            {navLabels.map((item, i) => {
-              const focused = section === 'nav' && _navIdx === i;
-              return (
-                <View key={item} style={[s.navItem, focused && s.navItemFocused]}>
-                  <Text style={[s.navItemTxt, focused && s.navItemTxtFocused]}>{item}</Text>
-                  {focused && <LinearGradient colors={[Colors.primary, Colors.primaryLight]} start={{x:0,y:0}} end={{x:1,y:0}} style={s.navUnderline} />}
-                </View>
-              );
-            })}
-          </View> */}
-
-          <View style={s.navRight}>
-            <Text style={s.navTime}>ABU DHABI</Text>
-            <View style={s.navLiveDot}>
-              <View style={s.liveDot} />
-              <Text style={s.navLiveTxt}>LIVE</Text>
-            </View>
-          </View>
-        </View>
+        <AppHeader
+          date={headerClock.date}
+          time={headerClock.time}
+          temperature={headerClock.temperature}
+          weatherCondition={headerClock.weatherCondition}
+        />
 
         <GoldRule />
 
@@ -460,11 +455,7 @@ export default function EtihadPlazaScreen({
           <View style={s.heroContent}>
             <View style={s.heroLeft}>
               <View style={s.heroPreviewCard}>
-                <Image
-                  source={{uri: hero.preview.image}}
-                  style={s.heroPreviewImg}
-                  resizeMode="cover"
-                />
+                <RetryImage uri={hero.preview.image} style={s.heroPreviewImg} resizeMode="cover" />
                 <LinearGradient
                   colors={[
                     'transparent',
@@ -576,6 +567,8 @@ export default function EtihadPlazaScreen({
             horizontal
             scrollEnabled={false}
             showsHorizontalScrollIndicator={false}
+            scrollEventThrottle={16}
+            removeClippedSubviews
             contentContainerStyle={s.hlStrip}>
             {highlights.map((hl, i) => {
               const focused = section === 'highlights' && hlIdx === i;
@@ -583,11 +576,7 @@ export default function EtihadPlazaScreen({
                 <View
                   key={hl.id}
                   style={[s.hlCard, focused && s.hlCardFocused]}>
-                  <Image
-                    source={{uri: hl.img}}
-                    style={s.hlImg}
-                    resizeMode="cover"
-                  />
+                  <RetryImage uri={hl.img} style={s.hlImg} resizeMode="cover" />
                   <LinearGradient
                     colors={[
                       'transparent',
@@ -664,6 +653,8 @@ export default function EtihadPlazaScreen({
             horizontal
             scrollEnabled={false}
             showsHorizontalScrollIndicator={false}
+            scrollEventThrottle={16}
+            removeClippedSubviews
             contentContainerStyle={s.galStrip}>
             {gallery.map((item, i) => {
               const focused = section === 'gallery' && galleryIdx === i;
@@ -674,11 +665,7 @@ export default function EtihadPlazaScreen({
                   onPress={() => setFS(item)}
                   focusable
                   style={[s.galCard, focused && s.galCardFocused]}>
-                  <Image
-                    source={{uri: item.img}}
-                    style={s.galImg}
-                    resizeMode="cover"
-                  />
+                  <RetryImage uri={item.img} style={s.galImg} resizeMode="cover" />
                   <LinearGradient
                     colors={[
                       'transparent',
@@ -746,6 +733,8 @@ export default function EtihadPlazaScreen({
             horizontal
             scrollEnabled={false}
             showsHorizontalScrollIndicator={false}
+            scrollEventThrottle={16}
+            removeClippedSubviews
             contentContainerStyle={s.rmStrip}>
             {rooms.map((room, i) => {
               const focused = section === 'rooms' && roomIdx === i;
@@ -760,16 +749,12 @@ export default function EtihadPlazaScreen({
                   ]}>
                   {selected && (
                     <LinearGradient
-                      colors={[Colors.overlay.gold[8], 'transparent']}
+                      colors={[Colors.overlay.gold[14], 'transparent']}
                       style={StyleSheet.absoluteFill}
                     />
                   )}
                   <View style={s.rmThumb}>
-                    <Image
-                      source={{uri: room.img}}
-                      style={s.rmImg}
-                      resizeMode="cover"
-                    />
+                    <RetryImage uri={room.img} style={s.rmImg} resizeMode="cover" />
                     <LinearGradient
                       colors={[
                         'transparent',
@@ -836,11 +821,18 @@ const GAL_CARD_W = SW * 0.19;
 const RM_CARD_W = SW * 0.23;
 
 const s = StyleSheet.create({
-  root: {flex: 1, backgroundColor: C.bg},
+  root: {flex: 1, backgroundColor: 'transparent'},
+  loadingOverlayBody: {
+    flex: 1,
+    backgroundColor: 'transparent',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 16,
+  },
   loadingOverlay: {
     ...StyleSheet.absoluteFillObject,
     zIndex: 1000,
-    backgroundColor: C.bg,
+    backgroundColor: 'transparent',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 16,
@@ -848,7 +840,7 @@ const s = StyleSheet.create({
   loadingHint: {
     fontFamily: FontFamily.book,
     fontSize: 12,
-    color: C.muted,
+    color: C.goldLight,
     letterSpacing: 1.5,
   },
   errorStateTitle: {
@@ -890,11 +882,11 @@ const s = StyleSheet.create({
     paddingHorizontal: 36,
     paddingVertical: 14,
     height: 68,
-    backgroundColor: C.bg,
+    backgroundColor: 'transparent',
     borderBottomWidth: 1,
     borderBottomColor: C.border,
   },
-  navFocused: {backgroundColor: C.bg},
+  navFocused: {backgroundColor: 'transparent'},
   navBrand: {},
   navLogo: {width: 140, height: 45},
   brandSub: {
@@ -912,12 +904,12 @@ const s = StyleSheet.create({
     borderRadius: 2,
   },
   navItemTxt: {
-    fontFamily: FontFamily.light,
+    fontFamily: FontFamily.book,
     fontSize: 9.5,
     letterSpacing: 2.8,
     color: C.goldLight,
   },
-  navItemTxtFocused: {fontFamily: FontFamily.book, color: C.gold},
+  navItemTxtFocused: {fontFamily: FontFamily.text, color: C.gold},
   navUnderline: {
     position: 'absolute',
     bottom: -2,
@@ -935,7 +927,7 @@ const s = StyleSheet.create({
   navLiveDot: {flexDirection: 'row', alignItems: 'center', gap: 6},
   liveDot: {width: 6, height: 6, borderRadius: 3, backgroundColor: C.green},
   navLiveTxt: {
-    fontFamily: FontFamily.text,
+    fontFamily: FontFamily.book,
     fontSize: 8,
     letterSpacing: 2,
     color: C.green,
@@ -945,7 +937,7 @@ const s = StyleSheet.create({
     height: SH * 0.8,
     position: 'relative',
     overflow: 'hidden',
-    backgroundColor: C.bg,
+    backgroundColor: 'transparent',
   },
   heroBg: {...StyleSheet.absoluteFillObject},
   heroBackdrop: {
@@ -985,15 +977,16 @@ const s = StyleSheet.create({
     padding: 16,
   },
   heroPreviewCat: {
-    fontFamily: FontFamily.text,
-    fontSize: 8,
-    letterSpacing: 2.5,
+    fontFamily: FontFamily.book,
+    fontSize: 10,
+    letterSpacing: 0.2,
     color: C.gold,
     marginBottom: 6,
   },
   heroPreviewTitle: {
-    fontFamily: FontFamily.light,
-    fontSize: 18,
+    fontFamily: FontFamily.book,
+    fontSize: 13,
+    lineHeight: 18,
     color: C.text,
     marginBottom: 5,
   },
@@ -1007,26 +1000,26 @@ const s = StyleSheet.create({
 
   heroRight: {flex: 1, maxWidth: '70%'},
   heroTitle: {
-    fontFamily: FontFamily.light,
+    fontFamily: FontFamily.book,
     fontSize: 52,
     color: C.text,
     lineHeight: 60,
     marginBottom: 16,
-    letterSpacing: -0.5,
+    letterSpacing: 0.2,
     textShadowColor: 'rgba(0,0,0,0.85)',
     textShadowOffset: {width: 0, height: 2},
     textShadowRadius: 6,
   },
   heroTitleGold: {
-    color: C.goldLight,
+    color: C.gold,
     textShadowColor: 'rgba(0,0,0,0.9)',
     textShadowOffset: {width: 0, height: 2},
     textShadowRadius: 6,
   },
   heroDesc: {
     fontFamily: FontFamily.book,
-    fontSize: 14,
-    lineHeight: 22,
+    fontSize: 10,
+    lineHeight: 15,
     color: C.goldLight,
     marginBottom: 32,
     textShadowColor: 'rgba(0,0,0,0.95)',
@@ -1036,7 +1029,6 @@ const s = StyleSheet.create({
   heroBtns: {flexDirection: 'row', gap: 14},
   btnGold: {paddingHorizontal: 28, paddingVertical: 13},
   btnFocused: {
-    elevation: 8,
     transform: [{scale: 1.02}],
   },
   btnGoldTxt: {
@@ -1049,11 +1041,11 @@ const s = StyleSheet.create({
     paddingHorizontal: 28,
     paddingVertical: 13,
     borderWidth: 1,
-    borderColor: C.border,
+    borderColor: Colors.overlay.gold[40],
     backgroundColor: 'transparent',
   },
   btnGhostFocused: {
-    borderColor: C.goldLight,
+    borderColor: C.gold,
     borderWidth: 2,
     backgroundColor: 'transparent',
     transform: [{scale: 1.02}],
@@ -1062,7 +1054,7 @@ const s = StyleSheet.create({
     fontFamily: FontFamily.medium,
     fontSize: 9.5,
     letterSpacing: 2.5,
-    color: C.goldLight,
+    color: C.gold,
   },
   btnGhostTxtFocused: {color: C.goldLight},
 
@@ -1072,14 +1064,14 @@ const s = StyleSheet.create({
     left: 0,
     right: 0,
     flexDirection: 'row',
-    backgroundColor: C.bg,
+    backgroundColor: 'transparent',
     borderTopWidth: 1,
     borderTopColor: C.border,
   },
   statItem: {flex: 1, paddingVertical: 18, alignItems: 'center'},
   statBorder: {borderRightWidth: 1, borderRightColor: C.sep},
   statNum: {
-    fontFamily: FontFamily.light,
+    fontFamily: FontFamily.book,
     fontSize: 26,
     color: C.gold,
     lineHeight: 30,
@@ -1087,19 +1079,22 @@ const s = StyleSheet.create({
   },
   statLabel: {
     fontFamily: FontFamily.book,
-    fontSize: 8,
-    letterSpacing: 2,
+    fontSize: 10,
+    letterSpacing: 0.2,
     color: C.goldLight,
   },
 
   section: {
     paddingHorizontal: 44,
     paddingVertical: 36,
-    backgroundColor: C.bg,
+    backgroundColor: 'transparent',
     borderBottomWidth: 1,
-    borderBottomColor: Colors.overlay.gold[8],
+    borderBottomColor: Colors.overlay.gold[14],
   },
-  sectionFocused: {backgroundColor: C.bg, borderBottomColor: C.border},
+  sectionFocused: {
+    backgroundColor: 'transparent',
+    borderBottomColor: Colors.overlay.gold[35],
+  },
   sectionHdr: {marginBottom: 24},
   sectionHdrRow: {
     flexDirection: 'row',
@@ -1107,16 +1102,16 @@ const s = StyleSheet.create({
     justifyContent: 'space-between',
   },
   sectionTitle: {
-    fontFamily: FontFamily.light,
-    fontSize: 26,
+    fontFamily: FontFamily.book,
+    fontSize: 24,
     color: C.text,
     letterSpacing: 0.4,
   },
-  sectionGold: {color: C.goldLight},
+  sectionGold: {color: C.gold},
   sectionHint: {
     fontFamily: FontFamily.book,
-    fontSize: 8.5,
-    letterSpacing: 2,
+    fontSize: 10,
+    letterSpacing: 0.2,
     color: C.goldLight,
   },
   eyebrow: {
@@ -1127,9 +1122,9 @@ const s = StyleSheet.create({
   },
   eyebrowLine: {width: 24, height: 1, backgroundColor: C.gold, opacity: 0.8},
   eyebrowTxt: {
-    fontFamily: FontFamily.text,
-    fontSize: 8,
-    letterSpacing: 3.5,
+    fontFamily: FontFamily.book,
+    fontSize: 10,
+    letterSpacing: 0.2,
     color: C.text,
     textShadowColor: 'rgba(0,0,0,0.9)',
     textShadowOffset: {width: 0, height: 1},
@@ -1146,7 +1141,7 @@ const s = StyleSheet.create({
     borderColor: C.border,
     position: 'relative',
   },
-  hlCardFocused: {borderColor: C.goldLight, borderWidth: 2, elevation: 8},
+  hlCardFocused: {borderColor: C.goldLight, borderWidth: 2},
   hlImg: {...StyleSheet.absoluteFillObject},
   hlFocusLine: {position: 'absolute', top: 0, left: 0, right: 0, height: 2.5},
   hlBody: {position: 'absolute', bottom: 0, left: 0, right: 0, padding: 16},
@@ -1157,19 +1152,20 @@ const s = StyleSheet.create({
     marginBottom: 8,
   },
   hlCat: {
-    fontFamily: FontFamily.text,
-    fontSize: 7.5,
-    letterSpacing: 2.5,
+    fontFamily: FontFamily.book,
+    fontSize: 10,
+    letterSpacing: 0.2,
     color: C.goldLight,
   },
   hlBadge: {fontSize: 13},
   hlTitle: {
-    fontFamily: FontFamily.light,
-    fontSize: 17,
+    fontFamily: FontFamily.book,
+    fontSize: 13,
+    lineHeight: 18,
     color: C.text,
     marginBottom: 5,
   },
-  hlTitleFocused: {fontFamily: FontFamily.book, color: C.text},
+  hlTitleFocused: {fontFamily: FontFamily.text, color: C.gold},
   hlSub: {
     fontFamily: FontFamily.book,
     fontSize: 10,
@@ -1197,9 +1193,9 @@ const s = StyleSheet.create({
     paddingVertical: 3,
   },
   hlFocusPillTxt: {
-    fontFamily: FontFamily.medium,
-    fontSize: 7,
-    letterSpacing: 1.5,
+    fontFamily: FontFamily.book,
+    fontSize: 10,
+    letterSpacing: 0.2,
     color: C.gold,
   },
 
@@ -1213,29 +1209,30 @@ const s = StyleSheet.create({
     borderColor: C.border,
     position: 'relative',
   },
-  galCardFocused: {borderColor: C.goldLight, borderWidth: 2, elevation: 8},
+  galCardFocused: {borderColor: C.goldLight, borderWidth: 2},
   galImg: {...StyleSheet.absoluteFillObject},
   galFocusFrame: {...StyleSheet.absoluteFillObject},
   galFocusTop: {position: 'absolute', top: 0, left: 0, right: 0, height: 2.5},
   galLabel: {position: 'absolute', bottom: 0, left: 0, right: 0, padding: 14},
   galLabelTxt: {
     fontFamily: FontFamily.book,
-    fontSize: 9,
-    letterSpacing: 2,
+    fontSize: 13,
+    lineHeight: 18,
+    letterSpacing: 0.2,
     color: C.text,
     marginBottom: 4,
   },
   galOpenHint: {
     fontFamily: FontFamily.book,
-    fontSize: 8,
-    letterSpacing: 1.5,
+    fontSize: 10,
+    letterSpacing: 0.2,
     color: C.gold,
   },
   galZoomIcon: {
     position: 'absolute',
     top: 10,
     right: 10,
-    backgroundColor: C.bg,
+    backgroundColor: 'transparent',
     borderWidth: 1,
     borderColor: C.gold,
     width: 28,
@@ -1248,14 +1245,14 @@ const s = StyleSheet.create({
   rmStrip: {paddingRight: 16, gap: 16},
   rmCard: {
     width: RM_CARD_W,
-    backgroundColor: C.surface,
+    backgroundColor: 'transparent',
     borderRadius: 3,
     overflow: 'hidden',
     borderWidth: 1,
     borderColor: C.border,
     position: 'relative',
   },
-  rmCardFocused: {borderColor: C.goldLight, borderWidth: 2, elevation: 8},
+  rmCardFocused: {borderColor: C.goldLight, borderWidth: 2},
   rmCardSelected: {borderColor: C.gold},
   rmThumb: {height: 180, position: 'relative', overflow: 'hidden'},
   rmImg: {width: '100%', height: '100%'},
@@ -1264,7 +1261,7 @@ const s = StyleSheet.create({
     position: 'absolute',
     top: 12,
     left: 12,
-    backgroundColor: C.bg,
+    backgroundColor: 'transparent',
     borderWidth: 1,
     borderColor: C.border,
     paddingHorizontal: 10,
@@ -1284,7 +1281,7 @@ const s = StyleSheet.create({
     color: C.text,
     marginBottom: 5,
   },
-  rmNameFocused: {color: C.text},
+  rmNameFocused: {color: C.gold},
   rmSize: {
     fontFamily: FontFamily.book,
     fontSize: 8,
@@ -1306,21 +1303,21 @@ const s = StyleSheet.create({
     marginBottom: 3,
   },
   rmPrice: {fontFamily: FontFamily.medium, fontSize: 17, color: C.gold},
-  rmPriceFocused: {color: C.goldLight},
+  rmPriceFocused: {color: C.gold},
   rmNight: {fontFamily: FontFamily.book, fontSize: 9, color: C.goldLight},
   dots: {flexDirection: 'row', justifyContent: 'center', gap: 8, marginTop: 18},
   dot: {
     width: 5,
     height: 5,
     borderRadius: 3,
-    backgroundColor: Colors.overlay.gold[30],
+    backgroundColor: Colors.overlay.gold[35],
   },
   dotActive: {width: 20, backgroundColor: C.gold},
 
   fsOverlay: {
     ...StyleSheet.absoluteFillObject,
     zIndex: 999,
-    backgroundColor: C.bg,
+    backgroundColor: 'transparent',
   },
   fsImg: {width: '100%', height: '100%'},
   fsLabel: {
@@ -1332,15 +1329,17 @@ const s = StyleSheet.create({
     gap: 10,
   },
   fsLabelTxt: {
-    fontFamily: FontFamily.light,
-    fontSize: 18,
-    letterSpacing: 4,
+    fontFamily: FontFamily.book,
+    fontSize: 24,
+    letterSpacing: 0.4,
     color: C.text,
   },
   fsClose: {
     fontFamily: FontFamily.book,
     fontSize: 10,
-    letterSpacing: 2.5,
+    lineHeight: 15,
+    letterSpacing: 0.2,
     color: C.goldLight,
   },
 });
+

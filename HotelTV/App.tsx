@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Animated, Easing, Platform, StatusBar, StyleSheet, View } from 'react-native';
+import { Animated, Easing, ImageBackground, StatusBar, StyleSheet, View } from 'react-native';
 import { Colors } from './src/theme/colors';
 import { EmergencyAlertProvider } from './src/context/EmergencyAlertContext';
 import { NotificationProvider, useNotifications } from './src/context/NotificationContext';
@@ -9,6 +9,7 @@ import { useAppUpdate } from './src/hooks/useAppUpdate';
 import { useAlertListener } from './src/hooks/useAlertListener';
 import { useNotificationListener } from './src/hooks/useNotificationListener';
 import { useWelcomeGuest } from './src/hooks/useWelcomeGuest';
+import { useBackgroundImageUri } from './src/hooks/useBackgroundImage';
 import EtihadSplashScreen from './src/screens/EtihadSplashScreen';
 import WelcomeScreen, { NavItemData } from './src/screens/WelcomeScreen';
 import FacilitiesScreen from './src/screens/FacilitiesScreen';
@@ -21,13 +22,11 @@ import EtihadHypermarketScreen from './src/screens/EtihadHypermarketScreen';
 import NotificationScreen from './src/screens/NotificationScreen';
 
 // Diagnostic: log every hardware key received from the physical remote.
-// Remove or comment out when no longer needed.
 function useDiagnosticKeyLog() {
   useEffect(() => {
     if (!__DEV__) return;
     let subscription: { remove: () => void } | null = null;
     try {
-      // react-native-keyevent is already linked — use it to confirm JS receives keys
       // eslint-disable-next-line @typescript-eslint/no-var-requires
       const KeyEvent = require('react-native-keyevent').default;
       KeyEvent.onKeyDownListener((evt: { keyCode: number; pressedKey: string }) => {
@@ -41,8 +40,8 @@ function useDiagnosticKeyLog() {
   }, []);
 }
 
-// TV performance: Short fade only. All 4 screens mounted for instant D-pad response
-// (unmounting causes focus loss). Animations reduced for budget TV (~1GB RAM).
+// Screen fade wrapper — used for screen transitions AFTER splash is gone.
+// isActive=true → opacity 1 (120ms), isActive=false → opacity 0 (80ms).
 function AnimatedScreen({
   isActive,
   children,
@@ -72,27 +71,35 @@ function AnimatedScreen({
 }
 
 function AppContent(): React.JSX.Element {
-  const [showSplash, setShowSplash] = useState(true);
-  // After splash, mount Welcome first; defer other screens so home isn’t blocked by 7+ heavy trees.
+  // Splash is rendered as a full-screen overlay on top of the home.
+  // Home mounts at FULL OPACITY from the start so when the splash fades out
+  // the home is immediately visible — no blank flash, no double-opacity ghost.
+  const [splashDone, setSplashDone] = useState(false);
   const [heavyScreensReady, setHeavyScreensReady] = useState(false);
-  // Start network listeners only after splash to avoid slow first paint.
-  useAlertListener(!showSplash);
-  useNotificationListener(!showSplash);
-  const welcomeGuest = useWelcomeGuest(!showSplash);
-  const { unreadCount } = useNotifications();
-  const [screen, setScreen] = useState<'welcome' | 'facilities' | 'channel' | 'etihadChannels' | 'dining' | 'plaza' | 'health' | 'hypermarket' | 'notifications'>('welcome');
 
-  // Diagnostic — remove after confirming remote events reach JS
+  // Start listeners immediately — data loads while splash is visible.
+  useAlertListener(true);
+  useNotificationListener(true);
+  const welcomeGuest = useWelcomeGuest(true);
+  const backgroundImageUri = useBackgroundImageUri();
+  const { unreadCount } = useNotifications();
+  const [screen, setScreen] = useState<
+    'welcome' | 'facilities' | 'channel' | 'etihadChannels' | 'dining' |
+    'plaza' | 'health' | 'hypermarket' | 'notifications'
+  >('welcome');
+
   useDiagnosticKeyLog();
 
-  const handleSplashFinish = React.useCallback(() => setShowSplash(false), []);
+  // Unmount splash instantly — home is already at opacity=1 underneath so
+  // the transition is clean. A JS-driven fade risks the logo ghosting on slow TVs
+  // because the overlay stays mounted (at opacity~0) until the next JS re-render.
+  const handleSplashFinish = React.useCallback(() => {
+    setSplashDone(true);
+  }, []);
 
+  // After splash fades, defer heavy secondary screens by 2 rAF.
   useEffect(() => {
-    if (showSplash) {
-      setHeavyScreensReady(false);
-      return;
-    }
-    setHeavyScreensReady(false);
+    if (!splashDone) return;
     let raf2: number | undefined;
     const raf1 = requestAnimationFrame(() => {
       raf2 = requestAnimationFrame(() => setHeavyScreensReady(true));
@@ -101,15 +108,12 @@ function AppContent(): React.JSX.Element {
       cancelAnimationFrame(raf1);
       if (raf2 != null) cancelAnimationFrame(raf2);
     };
-  }, [showSplash]);
+  }, [splashDone]);
 
   const mountSecondaryScreens = heavyScreensReady || screen !== 'welcome';
 
   const commonProps = {
     guestName: welcomeGuest.guestName,
-    temperature: 23,
-    weatherCondition: 'SUNNY',
-    // date and time omitted — WelcomeScreen uses real-time values
   } as const;
 
   const welcomeScreenExtra = {
@@ -118,49 +122,42 @@ function AppContent(): React.JSX.Element {
     roomNavLabel: welcomeGuest.roomNavLabel,
   };
 
-  // Fast startup: while splash is visible, avoid mounting all heavy screens.
-  // This reduces JS work at cold start and prevents long pre-splash delays.
-  if (showSplash) {
-    return (
-      <View style={[styles.container, styles.containerSplash]}>
-        <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
-        <EtihadSplashScreen onFinish={handleSplashFinish} />
-      </View>
-    );
-  }
+  const backgroundSource =
+    backgroundImageUri != null && backgroundImageUri.length > 0
+      ? { uri: backgroundImageUri }
+      : require('./src/assets/background.jpg');
 
   return (
-    <View style={styles.container}>
+    <ImageBackground source={backgroundSource} style={styles.container} resizeMode="cover">
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
 
-      {/* Home screens — always mounted underneath, ready when splash ends */}
+      {/*
+        AnimatedScreen receives isActive={screen === 'welcome'} — NOT gated by splashDone.
+        This means the Welcome screen's AnimatedScreen initialises at opacity=1 and stays
+        there the whole time. The splash overlay sits on top and hides it; when the splash
+        fades out, home is already at opacity=1 — no blank flash, no ghost text.
+
+        WelcomeScreen itself receives isActive gated by splashDone so D-pad keys are
+        suppressed while the splash is visible.
+      */}
       <AnimatedScreen isActive={screen === 'welcome'}>
         <WelcomeScreen
           {...commonProps}
           {...welcomeScreenExtra}
-          isActive={screen === 'welcome'}
+          isActive={screen === 'welcome' && splashDone}
           activeNavIndex={3}
-          backgroundImageSource={require('./src/assets/plaza-bg.jpg')}
+          backgroundImageSource={null}
           onNotificationsPress={() => setScreen('notifications')}
           notificationCount={unreadCount}
           onNavItemPress={(item: NavItemData) => {
-            if (item.icon === 'health') {
-              setScreen('health');
-            } else if (item.icon === 'cart') {
-              setScreen('hypermarket');
-            } else if (item.icon === 'facilities') {
-              setScreen('facilities');
-            } else if (item.icon === 'channel') {
-              setScreen('etihadChannels');
-            } else if (item.icon === 'tv') {
-              setScreen('channel');
-            } else if (item.icon === 'dining') {
-              setScreen('dining');
-            } else if (item.icon === 'plaza') {
-              setScreen('plaza');
-            } else if (item.icon === 'notifications') {
-              setScreen('notifications');
-            }
+            if (item.icon === 'health') { setScreen('health'); }
+            else if (item.icon === 'cart') { setScreen('hypermarket'); }
+            else if (item.icon === 'facilities') { setScreen('facilities'); }
+            else if (item.icon === 'channel') { setScreen('etihadChannels'); }
+            else if (item.icon === 'tv') { setScreen('channel'); }
+            else if (item.icon === 'dining') { setScreen('dining'); }
+            else if (item.icon === 'plaza') { setScreen('plaza'); }
+            else if (item.icon === 'notifications') { setScreen('notifications'); }
           }}
         />
       </AnimatedScreen>
@@ -174,7 +171,6 @@ function AppContent(): React.JSX.Element {
               onBack={() => setScreen('welcome')}
             />
           </AnimatedScreen>
-
           <AnimatedScreen isActive={screen === 'facilities'}>
             <FacilitiesScreen
               {...commonProps}
@@ -183,42 +179,36 @@ function AppContent(): React.JSX.Element {
               onBack={() => setScreen('welcome')}
             />
           </AnimatedScreen>
-
           <AnimatedScreen isActive={screen === 'channel'}>
             <EtihadChannelScreen
               isActive={screen === 'channel'}
               onBack={() => setScreen('welcome')}
             />
           </AnimatedScreen>
-
           <AnimatedScreen isActive={screen === 'etihadChannels'}>
             <EtihadChannelsScreen
               isActive={screen === 'etihadChannels'}
               onBack={() => setScreen('welcome')}
             />
           </AnimatedScreen>
-
           <AnimatedScreen isActive={screen === 'dining'}>
             <EtihadDiningScreen
               isActive={screen === 'dining'}
               onBack={() => setScreen('welcome')}
             />
           </AnimatedScreen>
-
           <AnimatedScreen isActive={screen === 'plaza'}>
             <EtihadPlazaScreen
               isActive={screen === 'plaza'}
               onBack={() => setScreen('welcome')}
             />
           </AnimatedScreen>
-
           <AnimatedScreen isActive={screen === 'hypermarket'}>
             <EtihadHypermarketScreen
               isActive={screen === 'hypermarket'}
               onBack={() => setScreen('welcome')}
             />
           </AnimatedScreen>
-
           <AnimatedScreen isActive={screen === 'notifications'}>
             <NotificationScreen
               isActive={screen === 'notifications'}
@@ -228,7 +218,17 @@ function AppContent(): React.JSX.Element {
         </>
       ) : null}
 
-    </View>
+      {/* Splash overlay — solid background, unmounts instantly when done so the logo
+          can never ghost over the home content on slow TVs. */}
+      {!splashDone && (
+        <View
+          style={[StyleSheet.absoluteFillObject, { backgroundColor: '#28343E' }]}
+          pointerEvents="box-none"
+        >
+          <EtihadSplashScreen onFinish={handleSplashFinish} />
+        </View>
+      )}
+    </ImageBackground>
   );
 }
 
@@ -258,10 +258,6 @@ function App(): React.JSX.Element {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background.dark,
-  },
-  containerSplash: {
-    backgroundColor: Colors.background.dark,
   },
   screen: {
     ...StyleSheet.absoluteFillObject,

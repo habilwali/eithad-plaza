@@ -21,28 +21,28 @@ import {
 } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
 import { FontFamily } from '../theme/typography';
+import { Colors } from '../theme/colors';
+import { AppHeader } from '../components/common/AppHeader';
+import { useAppHeaderClock } from '../hooks/useAppHeaderClock';
 
 const { width: SW, height: SH } = Dimensions.get('window');
 
-/* ─── THEME (Hypermarket — Fresh Green / Teal tones) ───────────────────────── */
+/** Matches WelcomeScreen `bottomNavBar` — store title / meta row */
+const BOTTOM_BAR_BG = 'rgba(40,52,62,0.88)';
+
+/* ─── THEME (align with FacilitiesScreen — Etihad text + primary accents) ── */
 const C = {
-  bg:          '#060F0A',
-  surface:     '#0C1A12',
-  panel:       '#0E1F15',
-  green:       '#2ECC71',
-  greenLight:  '#58D68D',
-  greenDim:    'rgba(46,204,113,0.35)',
-  teal:        '#1ABC9C',
-  tealLight:   '#48C9B0',
-  text:        '#F0F4F2',
-  muted:       '#7A9A85',
-  dim:         'rgba(240,244,242,0.35)',
-  border:      'rgba(46,204,113,0.15)',
-  borderDim:   'rgba(46,204,113,0.08)',
-  focusBorder: 'rgba(46,204,113,0.75)',
-  focusBg:     'rgba(46,204,113,0.08)',
-  selectedBg:  'rgba(46,204,113,0.10)',
-  priceRed:    '#E74C3C',
+  bg: Colors.background.dark,
+  surface: '#0C1A12',
+  panel: '#0E1F15',
+  text: Colors.text.light,
+  muted: Colors.text.muted,
+  border: Colors.overlay.gold[15],
+  borderDim: Colors.overlay.gold[8],
+  focusBorder: Colors.overlay.gold[75],
+  focusBg: Colors.overlay.gold[10],
+  selectedBg: Colors.overlay.gold[10],
+  priceRed: '#E74C3C',
   offerYellow: '#F1C40F',
 };
 
@@ -174,11 +174,17 @@ export interface EtihadHypermarketScreenProps {
   isActive?: boolean;
 }
 
-/* ─── GOLD / GREEN RULE ──────────────────────────────────── */
+/* ─── Brand rule (Etihad primary — same idea as Etihad Plaza / Facilities) ─ */
 function GreenRule() {
   return (
     <LinearGradient
-      colors={['transparent', C.green, C.teal, C.green, 'transparent']}
+      colors={[
+        'transparent',
+        Colors.primary,
+        Colors.primaryLight,
+        Colors.primary,
+        'transparent',
+      ]}
       start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
       style={s.greenRule}
     />
@@ -285,7 +291,7 @@ function CataloguePlaceholder({ focused, storeName, tabName }: {
   return (
     <View style={[s.imagePlaceholder, focused && s.imagePlaceholderFocused]}>
       <LinearGradient
-        colors={['transparent', 'rgba(46,204,113,0.04)', 'transparent']}
+        colors={['transparent', Colors.overlay.gold[6], 'transparent']}
         style={StyleSheet.absoluteFill}
       />
       <View style={s.gridOverlay} pointerEvents="none">
@@ -306,7 +312,7 @@ function CataloguePlaceholder({ focused, storeName, tabName }: {
       <View style={s.imagePlaceholderDivider} />
       <Text style={s.imagePlaceholderHint}>
         {'Add images to '}
-        <Text style={{ color: C.green }}>src/assets/catalogues/</Text>
+        <Text style={{ color: Colors.primary }}>src/assets/catalogues/</Text>
         {' and add to CATALOGUE_IMAGES array'}
       </Text>
     </View>
@@ -405,39 +411,18 @@ export default function EtihadHypermarketScreen({
     return () => sub.remove();
   }, [isActive]);
 
+  const headerClock = useAppHeaderClock();
+
   return (
     <View style={s.root}>
       <StatusBar barStyle="light-content" backgroundColor={C.bg} />
 
-      <View style={s.header}>
-        <View style={s.headerLeft}>
-          <Image
-            source={require('../assets/images/ethiad-logo-marketing.png')}
-            style={s.headerLogo}
-            resizeMode="contain"
-          />
-        </View>
-
-        <View style={s.headerCenter}>
-          <Text style={s.headerStoreName}>{store.name}</Text>
-          <View style={s.headerMeta}>
-            <View style={s.pulseDot} />
-            <Text style={s.headerMetaTxt}>
-              {store.location.toUpperCase()}  ·  {store.hours}
-            </Text>
-            {store.badge && <Text style={s.headerBadge}>{store.badge}</Text>}
-          </View>
-        </View>
-
-        <View style={s.headerRight}>
-          <View style={s.headerAreaBadge}>
-            <Text style={s.headerAreaLabel}>FLOOR AREA</Text>
-            <Text style={s.headerAreaVal}>{store.floorArea}</Text>
-          </View>
-        </View>
-      </View>
-
-      <GreenRule />
+      <AppHeader
+        date={headerClock.date}
+        time={headerClock.time}
+        temperature={headerClock.temperature}
+        weatherCondition={headerClock.weatherCondition}
+      />
 
       <View style={s.body}>
         <View style={[s.sidebar, navSection === 'sidebar' && s.sidebarFocused]}>
@@ -468,7 +453,7 @@ export default function EtihadHypermarketScreen({
                   ]}>
                     {active && (
                       <LinearGradient
-                        colors={['rgba(46,204,113,0.10)', 'transparent']}
+                        colors={[Colors.overlay.gold[10], 'transparent']}
                         start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
                         style={StyleSheet.absoluteFill}
                       />
@@ -547,38 +532,7 @@ export default function EtihadHypermarketScreen({
 
 /* ─── STYLES ─────────────────────────────────────────────── */
 const s = StyleSheet.create({
-  root: { flex: 1, backgroundColor: C.bg },
-
-  header: {
-    height: 68,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 36,
-    backgroundColor: C.bg,
-    borderBottomWidth: 1,
-    borderBottomColor: C.border,
-  },
-  headerLeft: { width: 140 },
-  headerLogo: { width: 140, height: 45 },
-  headerCenter: { flex: 1, alignItems: 'center' },
-  headerStoreName: { fontFamily: FontFamily.light, fontSize: 20, color: C.text, letterSpacing: 1, marginBottom: 2 },
-  headerMeta: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  pulseDot: { width: 5, height: 5, borderRadius: 2.5, backgroundColor: C.green },
-  headerMetaTxt: { fontFamily: FontFamily.book, fontSize: 8, letterSpacing: 2, color: C.muted },
-  headerBadge: { fontSize: 10, marginLeft: 4 },
-  headerRight: { width: 140, alignItems: 'flex-end' },
-  headerAreaBadge: {
-    alignItems: 'flex-end',
-    backgroundColor: 'rgba(46,204,113,0.08)',
-    borderWidth: 1,
-    borderColor: 'rgba(46,204,113,0.2)',
-    borderRadius: 3,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-  },
-  headerAreaLabel: { fontFamily: FontFamily.book, fontSize: 7, letterSpacing: 2, color: C.tealLight, marginBottom: 1 },
-  headerAreaVal: { fontFamily: FontFamily.medium, fontSize: 12, color: C.green, letterSpacing: 0.5 },
+  root: { flex: 1, backgroundColor: 'transparent' },
 
   greenRule: { height: 1 },
 
@@ -587,11 +541,11 @@ const s = StyleSheet.create({
   sidebar: {
     width: SIDEBAR_W,
     borderRightWidth: 1,
-    borderRightColor: C.border,
-    backgroundColor: C.bg,
+    borderRightColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: BOTTOM_BAR_BG,
     flexDirection: 'column',
   },
-  sidebarFocused: { borderRightColor: C.focusBorder },
+  sidebarFocused: { borderRightColor: 'rgba(255,255,255,0.14)' },
   sidebarHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -600,10 +554,15 @@ const s = StyleSheet.create({
     paddingBottom: 10,
     gap: 10,
     borderBottomWidth: 1,
-    borderBottomColor: C.borderDim,
+    borderBottomColor: 'rgba(255,255,255,0.08)',
   },
-  sidebarHeaderTxt: { fontFamily: FontFamily.text, fontSize: 8, letterSpacing: 4, color: C.tealLight },
-  sidebarHeaderLine: { flex: 1, height: 1, backgroundColor: C.borderDim },
+  sidebarHeaderTxt: {
+    fontFamily: FontFamily.book,
+    fontSize: 10,
+    letterSpacing: 0.2,
+    color: C.muted,
+  },
+  sidebarHeaderLine: { flex: 1, height: 1, backgroundColor: 'rgba(255,255,255,0.1)' },
   sidebarItem: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -612,12 +571,12 @@ const s = StyleSheet.create({
     borderLeftWidth: 2,
     borderLeftColor: 'transparent',
     borderBottomWidth: 1,
-    borderBottomColor: C.borderDim,
+    borderBottomColor: 'rgba(255,255,255,0.06)',
     gap: 12,
     position: 'relative',
   },
-  sidebarItemActive: { borderLeftColor: C.green },
-  sidebarItemFocused: { borderLeftColor: C.green, backgroundColor: C.focusBg },
+  sidebarItemActive: { borderLeftColor: Colors.primary },
+  sidebarItemFocused: { borderLeftColor: Colors.primary, backgroundColor: C.focusBg },
   storeColorChip: {
     width: 40,
     height: 40,
@@ -629,28 +588,70 @@ const s = StyleSheet.create({
   },
   sidebarEmoji: { fontSize: 22 },
   sidebarItemBody: { flex: 1 },
-  sidebarName: { fontFamily: FontFamily.book, fontSize: 14, color: 'rgba(240,244,242,0.35)', letterSpacing: 0.2, marginBottom: 2 },
-  sidebarNameActive: { color: C.text },
-  sidebarSub: { fontFamily: FontFamily.book, fontSize: 7, letterSpacing: 1.5, color: C.tealLight, marginBottom: 2 },
-  sidebarLocation: { fontFamily: FontFamily.book, fontSize: 9, color: C.muted },
-  sidebarArrow: { width: 22, height: 22, backgroundColor: C.green, alignItems: 'center', justifyContent: 'center', borderRadius: 2, flexShrink: 0 },
-  sidebarArrowTxt: { fontFamily: FontFamily.medium, fontSize: 14, color: '#060F0A' },
+  sidebarName: {
+    fontFamily: FontFamily.book,
+    fontSize: 13,
+    lineHeight: 18,
+    color: C.muted,
+    letterSpacing: 0.2,
+    marginBottom: 2,
+  },
+  sidebarNameActive: { fontFamily: FontFamily.text, color: C.text },
+  sidebarSub: {
+    fontFamily: FontFamily.book,
+    fontSize: 10,
+    lineHeight: 15,
+    letterSpacing: 0.2,
+    color: C.muted,
+    marginBottom: 2,
+  },
+  sidebarLocation: {
+    fontFamily: FontFamily.book,
+    fontSize: 10,
+    lineHeight: 15,
+    color: C.text,
+  },
+  sidebarArrow: {
+    width: 22,
+    height: 22,
+    backgroundColor: Colors.primary,
+    borderRadius: 2,
+    flexShrink: 0,
+    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sidebarArrowTxt: {
+    fontFamily: FontFamily.medium,
+    fontSize: 14,
+    lineHeight: 14,
+    color: Colors.button.primaryText,
+    textAlign: 'center',
+    includeFontPadding: false,
+    ...(Platform.OS === 'android' ? { marginTop: 2 } : {}),
+  },
   sidebarHint: { paddingTop: 2, paddingBottom: 14 },
   hintRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingTop: 10 },
   hintKey: {
     fontFamily: FontFamily.medium,
     fontSize: 11,
-    color: C.green,
-    backgroundColor: 'rgba(46,204,113,0.10)',
+    color: Colors.primary,
+    backgroundColor: Colors.overlay.gold[10],
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 2,
     borderWidth: 1,
-    borderColor: 'rgba(46,204,113,0.30)',
+    borderColor: Colors.overlay.gold[30],
   },
-  hintLabel: { fontFamily: FontFamily.book, fontSize: 8, letterSpacing: 1.5, color: C.muted, marginRight: 8 },
+  hintLabel: {
+    fontFamily: FontFamily.book,
+    fontSize: 10,
+    letterSpacing: 0.2,
+    color: C.muted,
+    marginRight: 8,
+  },
 
-  content: { flex: 1, flexDirection: 'column', backgroundColor: C.bg },
+  content: { flex: 1, flexDirection: 'column', backgroundColor: 'transparent' },
 
   tabBar: {
     flexDirection: 'row',
@@ -669,11 +670,16 @@ const s = StyleSheet.create({
   },
   tabBtnFocused: { backgroundColor: C.focusBg },
   tabIcon: { fontSize: 16, marginBottom: 1 },
-  tabLabel: { fontFamily: FontFamily.text, fontSize: 7.5, letterSpacing: 1.5, color: C.muted },
-  tabLabelActive: { color: C.green },
+  tabLabel: {
+    fontFamily: FontFamily.book,
+    fontSize: 10,
+    letterSpacing: 0.2,
+    color: C.muted,
+  },
+  tabLabelActive: { fontFamily: FontFamily.text, color: Colors.primary },
   tabLine: { position: 'absolute', bottom: -1, left: 12, right: 12, height: 2 },
   imageDot: { width: 5, height: 5, borderRadius: 2.5, marginTop: 2 },
-  imageDotAvail: { backgroundColor: C.green },
+  imageDotAvail: { backgroundColor: Colors.primary },
   imageDotMissing: { backgroundColor: 'rgba(240,244,242,0.15)' },
 
   viewerArea: {
@@ -687,7 +693,7 @@ const s = StyleSheet.create({
     overflow: 'hidden',
     backgroundColor: C.surface,
   },
-  viewerAreaFocused: { borderColor: 'rgba(46,204,113,0.35)' },
+  viewerAreaFocused: { borderColor: Colors.overlay.gold[35] },
   viewerTopBar: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -698,17 +704,35 @@ const s = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: C.borderDim,
   },
-  viewerTabName: { fontFamily: FontFamily.medium, fontSize: 11, letterSpacing: 2, color: C.green },
+  viewerTabName: {
+    fontFamily: FontFamily.medium,
+    fontSize: 11,
+    letterSpacing: 2,
+    color: Colors.primary,
+  },
   viewerStorePill: {
-    backgroundColor: 'rgba(46,204,113,0.10)',
+    backgroundColor: Colors.overlay.gold[10],
     borderWidth: 1,
-    borderColor: 'rgba(46,204,113,0.25)',
+    borderColor: Colors.overlay.gold[30],
     borderRadius: 20,
     paddingHorizontal: 10,
     paddingVertical: 2,
   },
-  viewerStorePillTxt: { fontFamily: FontFamily.book, fontSize: 7.5, letterSpacing: 1.5, color: C.tealLight },
-  viewerHint: { flex: 1, textAlign: 'right', fontFamily: FontFamily.book, fontSize: 8, letterSpacing: 1.5, color: C.muted },
+  viewerStorePillTxt: {
+    fontFamily: FontFamily.book,
+    fontSize: 10,
+    letterSpacing: 0.2,
+    color: Colors.primaryLight,
+  },
+  viewerHint: {
+    flex: 1,
+    textAlign: 'right',
+    fontFamily: FontFamily.book,
+    fontSize: 10,
+    lineHeight: 15,
+    letterSpacing: 0.2,
+    color: C.muted,
+  },
 
   imageContainer: { flex: 1 },
   imageViewerWrap: {
@@ -721,7 +745,7 @@ const s = StyleSheet.create({
     width: 48,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(46,204,113,0.08)',
+    backgroundColor: Colors.overlay.gold[8],
     borderWidth: 1,
     borderColor: C.border,
   },
@@ -729,12 +753,12 @@ const s = StyleSheet.create({
   arrowRight: { borderLeftWidth: 0 },
   arrowBtnFocused: {
     backgroundColor: C.focusBg,
-    borderColor: C.green,
+    borderColor: Colors.primary,
   },
   arrowTxt: {
     fontFamily: FontFamily.medium,
     fontSize: 28,
-    color: C.green,
+    color: Colors.primary,
   },
   pageIndicator: {
     position: 'absolute',
@@ -746,9 +770,10 @@ const s = StyleSheet.create({
   pageIndicatorTxt: {
     fontFamily: FontFamily.book,
     fontSize: 10,
-    letterSpacing: 2,
+    lineHeight: 15,
+    letterSpacing: 0.2,
     color: C.muted,
-    backgroundColor: 'rgba(6,15,10,0.85)',
+    backgroundColor: Colors.overlay.black[55],
     paddingHorizontal: 12,
     paddingVertical: 4,
     borderRadius: 4,
@@ -771,26 +796,79 @@ const s = StyleSheet.create({
     borderColor: 'transparent',
     borderStyle: 'dashed',
   },
-  imagePlaceholderFocused: { borderColor: 'rgba(46,204,113,0.20)' },
+  imagePlaceholderFocused: { borderColor: Colors.overlay.gold[20] },
   imagePlaceholderEmoji: { fontSize: 48, marginBottom: 4 },
-  imagePlaceholderTitle: { fontFamily: FontFamily.light, fontSize: 18, letterSpacing: 4, color: C.text },
-  imagePlaceholderStore: { fontFamily: FontFamily.book, fontSize: 10, letterSpacing: 2, color: C.tealLight },
-  imagePlaceholderDivider: { width: 60, height: 1, backgroundColor: 'rgba(46,204,113,0.25)', marginVertical: 6 },
+  imagePlaceholderTitle: {
+    fontFamily: FontFamily.book,
+    fontSize: 24,
+    letterSpacing: 0.4,
+    color: C.text,
+  },
+  imagePlaceholderStore: {
+    fontFamily: FontFamily.book,
+    fontSize: 10,
+    lineHeight: 15,
+    letterSpacing: 0.2,
+    color: Colors.primaryLight,
+  },
+  imagePlaceholderDivider: {
+    width: 60,
+    height: 1,
+    backgroundColor: Colors.overlay.gold[30],
+    marginVertical: 6,
+  },
   imagePlaceholderHint: {
     fontFamily: FontFamily.book,
     fontSize: 10,
-    letterSpacing: 0.3,
+    letterSpacing: 0.2,
     color: C.muted,
     textAlign: 'center',
     lineHeight: 18,
     maxWidth: 400,
   },
   gridOverlay: { ...StyleSheet.absoluteFillObject },
-  gridLine: { position: 'absolute', left: 0, right: 0, height: 1, backgroundColor: 'rgba(46,204,113,0.04)' },
-  gridLineV: { position: 'absolute', top: 0, bottom: 0, width: 1, backgroundColor: 'rgba(46,204,113,0.04)' },
+  gridLine: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    height: 1,
+    backgroundColor: Colors.overlay.gold[6],
+  },
+  gridLineV: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    width: 1,
+    backgroundColor: Colors.overlay.gold[6],
+  },
   corner: { position: 'absolute', width: 14, height: 14 },
-  cornerTL: { top: 16, left: 16, borderTopWidth: 1, borderLeftWidth: 1, borderColor: 'rgba(46,204,113,0.30)' },
-  cornerTR: { top: 16, right: 16, borderTopWidth: 1, borderRightWidth: 1, borderColor: 'rgba(46,204,113,0.30)' },
-  cornerBL: { bottom: 16, left: 16, borderBottomWidth: 1, borderLeftWidth: 1, borderColor: 'rgba(46,204,113,0.30)' },
-  cornerBR: { bottom: 16, right: 16, borderBottomWidth: 1, borderRightWidth: 1, borderColor: 'rgba(46,204,113,0.30)' },
+  cornerTL: {
+    top: 16,
+    left: 16,
+    borderTopWidth: 1,
+    borderLeftWidth: 1,
+    borderColor: Colors.overlay.gold[30],
+  },
+  cornerTR: {
+    top: 16,
+    right: 16,
+    borderTopWidth: 1,
+    borderRightWidth: 1,
+    borderColor: Colors.overlay.gold[30],
+  },
+  cornerBL: {
+    bottom: 16,
+    left: 16,
+    borderBottomWidth: 1,
+    borderLeftWidth: 1,
+    borderColor: Colors.overlay.gold[30],
+  },
+  cornerBR: {
+    bottom: 16,
+    right: 16,
+    borderBottomWidth: 1,
+    borderRightWidth: 1,
+    borderColor: Colors.overlay.gold[30],
+  },
 });
+

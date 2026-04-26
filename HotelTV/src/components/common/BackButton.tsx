@@ -25,7 +25,7 @@ const SIZES = {
 export const BackButton = React.memo(function BackButton({
   onPress,
   focused = false,
-  label = 'BACK',
+  label = 'Back',
   size = 'sm',
 }: BackButtonProps) {
   const { circle, fontSize, arrowSize } = SIZES[size];
@@ -79,5 +79,6 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.overlay.gold[15],
   },
   arrow: { color: TEXT, lineHeight: 24, marginTop: -2 },
-  text: { fontFamily: FontFamily.medium, color: TEXT, letterSpacing: 2, textTransform: 'uppercase' },
+  text: { fontFamily: FontFamily.book, color: TEXT, letterSpacing: 0.5 },
 });
+

@@ -99,3 +99,4 @@ const styles = StyleSheet.create({
   dismissBtn:  { borderWidth: 1, borderColor: '#ffffff25', borderRadius: 8, paddingHorizontal: 34, paddingVertical: 14 },
   dismissText: { fontSize: 20, color: '#888888', textAlign: 'center' },
 });
+

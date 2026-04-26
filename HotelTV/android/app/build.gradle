@@ -3,22 +3,24 @@ apply plugin: "org.jetbrains.kotlin.android"
 apply plugin: "com.facebook.react"
 
 // ── Auto-versioning ──────────────────────────────────────────────────────────
-// Reads VERSION_CODE / VERSION_NAME from ../version.properties.
-// On every assembleRelease run, VERSION_CODE is incremented and saved back.
+// Reads VERSION_CODE from ../version.properties and increments by 1 immediately
+// at configuration time so the APK versionCode is always correct.
+// On every assembleRelease run the new code is persisted back to the file.
 def versionPropsFile = file("../version.properties")
 def versionProps = new Properties()
 if (versionPropsFile.canRead()) {
     versionPropsFile.withInputStream { versionProps.load(it) }
 }
-def appVersionCode = versionProps['VERSION_CODE'] ? versionProps['VERSION_CODE'].toInteger() : 1
+// Increment now (config time) so defaultConfig + ABI split both see the new value.
+def appVersionCode = (versionProps['VERSION_CODE'] ? versionProps['VERSION_CODE'].toInteger() : 0) + 1
 def appVersionName = versionProps['VERSION_NAME'] ?: "1.0"
 
 gradle.taskGraph.whenReady { taskGraph ->
     if (taskGraph.hasTask(":app:assembleRelease") || taskGraph.hasTask(":app:bundleRelease")) {
-        appVersionCode += 1
+        // Persist the version we just used so the next build increments from here.
         versionProps['VERSION_CODE'] = appVersionCode.toString()
         versionPropsFile.withOutputStream { versionProps.store(it, null) }
-        println ">>> Auto-bumped versionCode to ${appVersionCode}"
+        println ">>> Building release with versionCode ${appVersionCode}"
     }
 }
 // ─────────────────────────────────────────────────────────────────────────────

@@ -29,3 +29,4 @@ export const GoldRule = React.memo(function GoldRule({
 const styles = StyleSheet.create({
   rule: { width: '100%' },
 });
+

@@ -1,6 +1,6 @@
 /**
- * Etihad Plaza Hotel — Menu Screen
- * React Native TV App · Dark Gold Theme · Full D-Pad Navigation
+ * Etihad Plaza Hotel — Dining / Menu Screen
+ * React Native TV App · Facilities-aligned type + slate bars · Full D-Pad Navigation
  *
  * Navigation layout:
  *   'sidebar'   – restaurant list  (UP/DOWN to move, OK to select)
@@ -22,24 +22,27 @@ import {
 import LinearGradient from 'react-native-linear-gradient';
 import { FontFamily } from '../theme/typography';
 import { Colors } from '../theme/colors';
+import { AppHeader } from '../components/common/AppHeader';
+import { useAppHeaderClock } from '../hooks/useAppHeaderClock';
 
 const { width: SW, height: SH } = Dimensions.get('window');
 
-/* ─── THEME (Etihad brand — primary gold ~50%, Midnight Dune ~30%) ─────────── */
+/** Matches WelcomeScreen bottom nav / Hypermarket — venue strip & sidebar */
+const BOTTOM_BAR_BG = 'rgba(40,52,62,0.88)';
+
+/* ─── THEME (Facilities-aligned text + Etihad primary) ─────────────────────── */
 const C = {
-  bg:         Colors.background.dark,
-  surface:    Colors.midnightDune[600],
-  panel:      Colors.midnightDune[600],
-  gold:       Colors.primary,
-  goldLight:  Colors.primaryLight,
-  goldDim:    Colors.overlay.gold[35],
-  text:       Colors.text.light,
-  muted:      Colors.jebelGrey[300],
-  dim:        Colors.overlay.white[35],
-  border:     Colors.overlay.gold[15],
-  borderDim:  Colors.overlay.gold[8],
+  bg: Colors.background.dark,
+  surface: Colors.midnightDune[600],
+  panel: Colors.midnightDune[600],
+  gold: Colors.primary,
+  goldLight: Colors.primaryLight,
+  goldDim: Colors.overlay.gold[35],
+  text: Colors.text.light,
+  border: Colors.overlay.gold[15],
+  borderDim: Colors.overlay.gold[8],
   focusBorder: Colors.overlay.gold[75],
-  focusBg:    Colors.overlay.gold[10],
+  focusBg: Colors.overlay.gold[10],
   selectedBg: Colors.overlay.gold[12],
 };
 
@@ -257,7 +260,7 @@ const MenuItemRow = React.memo(function MenuItemRow({
         </View>
       ) : (
         <View style={[s.itemImgWrap, s.itemImgPlaceholder]}>
-          <Text style={{ fontSize: 28 }}>✦</Text>
+          <Text style={s.itemPlaceholderGlyph}>✦</Text>
         </View>
       )}
 
@@ -278,6 +281,7 @@ const MenuItemRow = React.memo(function MenuItemRow({
 
 /* ─── MAIN SCREEN ────────────────────────────────────────── */
 export default function EtihadDiningScreen({ onBack, isActive = false }: EtihadDiningScreenProps) {
+  const headerClock = useAppHeaderClock();
 
   /* ── state ── */
   const [navSection,  setNavSection]  = useState<NavSection>('sidebar');
@@ -405,43 +409,24 @@ export default function EtihadDiningScreen({ onBack, isActive = false }: EtihadD
   /* ─── RENDER ─────────────────────────────────────────── */
   return (
     <View style={s.root}>
-      <StatusBar barStyle="light-content" backgroundColor={C.bg} />
+      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
 
-      {/* ── HEADER BAR ── */}
-      <View style={s.header}>
-        <View style={s.headerLeft}>
-          <Image
-            source={require('../assets/images/ethiad-logo-marketing.png')}
-            style={s.headerLogo}
-            resizeMode="contain"
-          />
-          
-        </View>
-
-        <View style={s.headerCenter}>
-          <Text style={s.headerRestName}>{rest.name}</Text>
-          <View style={s.headerMeta}>
-            <View style={s.pulseWrap}>
-              <View style={s.pulseDot} />
-            </View>
-            <Text style={s.headerMetaTxt}>{rest.cuisine.toUpperCase()}  ·  {rest.floor.toUpperCase()}</Text>
-            {rest.michelin && <Text style={s.headerMichelin}>{rest.michelin}</Text>}
-          </View>
-        </View>
-
-        <View style={s.headerRight}>
-          <Text style={s.vatNote}>ALL PRICES INCL. VAT</Text>
-          <Text style={s.headerPrice}>{rest.price}</Text>
-        </View>
-      </View>
-
-      <GoldRule />
+      <AppHeader
+        date={headerClock.date}
+        time={headerClock.time}
+        temperature={headerClock.temperature}
+        weatherCondition={headerClock.weatherCondition}
+      />
 
       {/* ── HERO IMAGE ── */}
       <View style={s.heroWrap}>
         <Image key={rest.id} source={{ uri: rest.heroImg }} style={s.heroImg} resizeMode="cover" />
         <LinearGradient
-          colors={[Colors.overlay.midnight[50], Colors.overlay.midnight[85], C.bg]}
+          colors={[
+            Colors.overlay.midnight[50],
+            Colors.overlay.midnight[85],
+            'transparent',
+          ]}
           style={StyleSheet.absoluteFill}
         />
         {/* Hero overlay text */}
@@ -469,6 +454,7 @@ export default function EtihadDiningScreen({ onBack, isActive = false }: EtihadD
             ref={sidebarScrollRef}
             showsVerticalScrollIndicator={false}
             scrollEnabled={false}
+            scrollEventThrottle={16}
           >
             {RESTAURANTS.map((r, i) => {
               const active  = i === restIdx;
@@ -557,6 +543,7 @@ export default function EtihadDiningScreen({ onBack, isActive = false }: EtihadD
             ref={menuScrollRef}
             showsVerticalScrollIndicator={false}
             scrollEnabled={false}
+            scrollEventThrottle={16}
             style={s.itemsList}
           >
             {items.map((item, i) => (
@@ -588,51 +575,8 @@ export default function EtihadDiningScreen({ onBack, isActive = false }: EtihadD
 const s = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: C.bg,
+    backgroundColor: 'transparent',
   },
-
-  /* HEADER (matches Facilities/Channel topbar ~68px) */
-  header: {
-    height: 68,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 36,
-    backgroundColor: C.bg,
-    borderBottomWidth: 1,
-    borderBottomColor: C.border,
-  },
-  headerLeft: { width: 140 },
-  headerLogo: { width: 140, height: 45 },
-  headerBrand: {
-    fontFamily: FontFamily.light,
-    fontSize: 16,
-    letterSpacing: 4,
-    color: C.text,
-  },
-  headerSub: {
-    fontFamily: FontFamily.book,
-    fontSize: 8,
-    letterSpacing: 3.5,
-    color: C.muted,
-    marginTop: 2,
-  },
-  headerCenter: { flex: 1, alignItems: 'center' },
-  headerRestName: {
-    fontFamily: FontFamily.light,
-    fontSize: 20,
-    color: C.text,
-    letterSpacing: 1,
-    marginBottom: 2,
-  },
-  headerMeta: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  headerMetaTxt: { fontFamily: FontFamily.book, fontSize: 8, letterSpacing: 2, color: C.muted },
-  headerMichelin: { fontSize: 12 },
-  pulseWrap: { width: 6, height: 6, alignItems: 'center', justifyContent: 'center' },
-  pulseDot: { width: 4, height: 4, borderRadius: 2, backgroundColor: Colors.saadiyatBlue[400] },
-  headerRight: { width: 140, alignItems: 'flex-end' },
-  vatNote: { fontFamily: FontFamily.book, fontSize: 7, letterSpacing: 2, color: Colors.primaryLight, marginBottom: 2 },
-  headerPrice: { fontFamily: FontFamily.medium, fontSize: 12, color: C.gold, letterSpacing: 0.5 },
 
   /* GOLD RULE */
   goldRule: { height: 1 },
@@ -649,8 +593,19 @@ const s = StyleSheet.create({
     gap: 16,
   },
   heroAccentLine: { width: 28, height: 2, borderRadius: 1 },
-  heroName: { fontFamily: FontFamily.light, fontSize: 20, color: C.text, letterSpacing: 1 },
-  heroCuisine: { fontFamily: FontFamily.text, fontSize: 8.5, letterSpacing: 2.5, color: C.gold },
+  heroName: {
+    fontFamily: FontFamily.book,
+    fontSize: 24,
+    color: C.text,
+    letterSpacing: 0.4,
+  },
+  heroCuisine: {
+    fontFamily: FontFamily.book,
+    fontSize: 10,
+    lineHeight: 15,
+    letterSpacing: 0.2,
+    color: C.text,
+  },
 
   /* BODY */
   body: {
@@ -663,12 +618,12 @@ const s = StyleSheet.create({
   sidebar: {
     width: SIDEBAR_W,
     borderRightWidth: 1,
-    borderRightColor: C.border,
-    backgroundColor: C.bg,
+    borderRightColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: BOTTOM_BAR_BG,
     flexDirection: 'column',
   },
   sidebarFocused: {
-    borderRightColor: C.focusBorder,
+    borderRightColor: 'rgba(255,255,255,0.14)',
   },
   sidebarHeader: {
     flexDirection: 'row',
@@ -678,15 +633,15 @@ const s = StyleSheet.create({
     paddingBottom: 12,
     gap: 12,
     borderBottomWidth: 1,
-    borderBottomColor: C.borderDim,
+    borderBottomColor: 'rgba(255,255,255,0.08)',
   },
   sidebarHeaderTxt: {
-    fontFamily: FontFamily.text,
-    fontSize: 8,
-    letterSpacing: 4,
-    color: Colors.primaryLight,
+    fontFamily: FontFamily.book,
+    fontSize: 10,
+    letterSpacing: 0.2,
+    color: C.text,
   },
-  sidebarHeaderLine: { flex: 1, height: 1, backgroundColor: C.borderDim },
+  sidebarHeaderLine: { flex: 1, height: 1, backgroundColor: 'rgba(255,255,255,0.1)' },
   sidebarItem: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -695,7 +650,7 @@ const s = StyleSheet.create({
     borderLeftWidth: 2,
     borderLeftColor: 'transparent',
     borderBottomWidth: 1,
-    borderBottomColor: C.borderDim,
+    borderBottomColor: 'rgba(255,255,255,0.06)',
     gap: 14,
     position: 'relative',
   },
@@ -710,21 +665,40 @@ const s = StyleSheet.create({
   sidebarItemBody: { flex: 1 },
   sidebarName: {
     fontFamily: FontFamily.book,
-    fontSize: 16,
-    color: Colors.overlay.white[35],
-    letterSpacing: 0.3,
+    fontSize: 13,
+    lineHeight: 18,
+    color: 'rgba(255,255,255,0.82)',
+    letterSpacing: 0.2,
     marginBottom: 3,
   },
-  sidebarNameActive: { color: C.text },
-  sidebarCuisine: { fontFamily: FontFamily.book, fontSize: 7.5, letterSpacing: 1.8, color: Colors.primaryLight },
+  sidebarNameActive: { fontFamily: FontFamily.text, color: C.text },
+  sidebarCuisine: {
+    fontFamily: FontFamily.book,
+    fontSize: 10,
+    lineHeight: 15,
+    letterSpacing: 0.2,
+    color: C.text,
+  },
   sidebarMichelin: { fontSize: 11, marginTop: 4 },
   sidebarArrow: {
-    width: 22, height: 22,
+    width: 22,
+    height: 22,
     backgroundColor: C.gold,
-    alignItems: 'center', justifyContent: 'center',
     borderRadius: 2,
+    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  sidebarArrowTxt: { fontFamily: FontFamily.medium, fontSize: 14, color: Colors.button.primaryText },
+  sidebarArrowTxt: {
+    fontFamily: FontFamily.medium,
+    fontSize: 14,
+    lineHeight: 14,
+    color: Colors.button.primaryText,
+    textAlign: 'center',
+    includeFontPadding: false,
+    /* EtihadAltis › sits slightly high in the em-box; nudge down for optical center */
+    ...(Platform.OS === 'android' ? { marginTop: 2 } : {}),
+  },
   sidebarHint: { paddingTop: 2, paddingBottom: 14 },
   hintRow: {
     flexDirection: 'row',
@@ -744,12 +718,18 @@ const s = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.overlay.gold[35],
   },
-  hintLabel: { fontFamily: FontFamily.book, fontSize: 8, letterSpacing: 1.5, color: C.muted, marginRight: 8 },
+  hintLabel: {
+    fontFamily: FontFamily.book,
+    fontSize: 10,
+    letterSpacing: 0.2,
+    color: C.text,
+    marginRight: 8,
+  },
 
   /* CONTENT */
   content: {
     flex: 1,
-    backgroundColor: C.bg,
+    backgroundColor: 'transparent',
     flexDirection: 'column',
   },
 
@@ -757,8 +737,8 @@ const s = StyleSheet.create({
   tabBar: {
     flexDirection: 'row',
     borderBottomWidth: 1,
-    borderBottomColor: C.border,
-    backgroundColor: C.bg,
+    borderBottomColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: BOTTOM_BAR_BG,
   },
   tabBarFocused: { borderBottomColor: C.focusBorder },
   tabBtn: {
@@ -770,14 +750,19 @@ const s = StyleSheet.create({
   },
   tabBtnFocused: { backgroundColor: C.focusBg },
   tabLabel: {
-    fontFamily: FontFamily.text,
-    fontSize: 9,
-    letterSpacing: 2.5,
-    color: C.muted,
+    fontFamily: FontFamily.book,
+    fontSize: 10,
+    letterSpacing: 0.2,
+    color: 'rgba(255,255,255,0.82)',
     marginBottom: 2,
   },
-  tabLabelActive: { color: C.gold },
-  tabCount: { fontFamily: FontFamily.book, fontSize: 8, color: Colors.primaryLight },
+  tabLabelActive: { fontFamily: FontFamily.text, color: C.text },
+  tabCount: {
+    fontFamily: FontFamily.book,
+    fontSize: 10,
+    lineHeight: 15,
+    color: C.text,
+  },
   tabLine: {
     position: 'absolute',
     bottom: -1, left: 20, right: 20,
@@ -795,7 +780,12 @@ const s = StyleSheet.create({
     borderBottomColor: C.borderDim,
   },
   sectionLabelLine: { width: 24, height: 1, backgroundColor: C.gold, opacity: 0.6 },
-  sectionLabelTxt: { fontFamily: FontFamily.text, fontSize: 8.5, letterSpacing: 3.5, color: C.gold },
+  sectionLabelTxt: {
+    fontFamily: FontFamily.book,
+    fontSize: 10,
+    letterSpacing: 0.2,
+    color: C.text,
+  },
   sectionLabelLineLong: { flex: 1, height: 1, backgroundColor: C.borderDim },
 
   /* ITEMS LIST */
@@ -830,6 +820,11 @@ const s = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  itemPlaceholderGlyph: {
+    fontFamily: FontFamily.book,
+    fontSize: 28,
+    color: C.text,
+  },
   itemImg: { width: '100%', height: '100%' },
   itemBody: { flex: 1 },
   itemNameRow: {
@@ -841,16 +836,17 @@ const s = StyleSheet.create({
   },
   itemName: {
     fontFamily: FontFamily.book,
-    fontSize: 18,
+    fontSize: 13,
+    lineHeight: 18,
     color: C.text,
     letterSpacing: 0.2,
   },
-  itemNameFocused: { color: C.goldLight },
+  itemNameFocused: { fontFamily: FontFamily.text, color: C.text },
   itemDesc: {
     fontFamily: FontFamily.book,
-    fontSize: 12,
-    lineHeight: 18,
-    color: C.muted,
+    fontSize: 10,
+    lineHeight: 15,
+    color: C.text,
   },
   itemPrice: {
     fontFamily: FontFamily.medium,
@@ -869,7 +865,11 @@ const s = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 2,
   },
-  badgeTxt: { fontFamily: FontFamily.medium, fontSize: 7.5, letterSpacing: 1.2 },
+  badgeTxt: {
+    fontFamily: FontFamily.medium,
+    fontSize: 7.5,
+    letterSpacing: 1.2,
+  },
 
   /* ALLERGEN */
   allergenBox: {
@@ -885,7 +885,15 @@ const s = StyleSheet.create({
     borderRadius: 2,
     padding: 14,
   },
-  allergenIcon: { fontSize: 12, color: C.muted, marginTop: 1 },
-  allergenTxt: { fontFamily: FontFamily.book, flex: 1, fontSize: 10, lineHeight: 16, color: C.muted, letterSpacing: 0.3 },
+  allergenIcon: { fontSize: 12, color: C.text, marginTop: 1 },
+  allergenTxt: {
+    fontFamily: FontFamily.book,
+    flex: 1,
+    fontSize: 10,
+    lineHeight: 15,
+    color: C.text,
+    letterSpacing: 0.2,
+  },
 });
+
 

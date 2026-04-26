@@ -18,3 +18,4 @@ export const BrandText: React.FC<BrandTextProps> = ({
 }) => {
   return <RNText style={[Typography[variant], style]} {...props} />;
 };
+

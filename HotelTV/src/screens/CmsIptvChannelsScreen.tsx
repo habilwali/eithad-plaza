@@ -17,12 +17,13 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import FastImage from 'react-native-fast-image';
 import LinearGradient from 'react-native-linear-gradient';
-import VLCPlayer from 'react-native-vlc-media-player/VLCPlayer';
 import {FontFamily} from '../theme/typography';
 import {Colors} from '../theme/colors';
 import {PulseDot} from '../components/common';
-import {resolveCmsMediaUrl} from '../config/cmsEndpoints';
+import VlcPlayer from '../components/VlcPlayer';
+import {resolveCmsChannelStreamUrl, resolveCmsMediaUrl} from '../config/cmsEndpoints';
 import {getDeviceMacForWelcomeApi} from '../utils/getDeviceMacForWelcome';
 import {
   fetchIptvChannels,
@@ -47,6 +48,8 @@ const C = {
 const SIDEBAR_W = SW > 700 ? 260 : 200;
 const SIDEBAR_IH = 62;
 const PKG_CARD_H = 120;
+/** OK can fire twice in one press (global key + focused fullscreen button onPress). */
+const FULLSCREEN_TOGGLE_DEBOUNCE_MS = 420;
 
 type PkgSection = 'back' | 'list';
 type ChSection = 'backPkg' | 'sidebar' | 'player';
@@ -146,14 +149,13 @@ export default function CmsIptvChannelsScreen({
   const [activeChId, setActiveChId] = useState(0);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [paused, setPaused] = useState(false);
-  const [buffering, setBuffering] = useState(true);
-  const [fsExitFocused, setFsExitFocused] = useState(false);
 
   const pkgSectionRef = useRef<PkgSection>('list');
   const pkgIndexRef = useRef(0);
   const chSectionRef = useRef<ChSection>('sidebar');
   const sidebarIdxRef = useRef(0);
   const isFullscreenRef = useRef(false);
+  const lastFullscreenToggleAtRef = useRef(0);
   const pausedRef = useRef(false);
   const stepRef = useRef(step);
   const onBackRef = useRef(onBack);
@@ -208,11 +210,6 @@ export default function CmsIptvChannelsScreen({
       if (cancelled) {
         return;
       }
-      if (!m) {
-        setPkgStatus('error');
-        setPkgError('Unable to read device identity. Contact support.');
-        return;
-      }
       setMac(m);
       const res = await fetchIptvPackages(m);
       if (cancelled) {
@@ -253,7 +250,6 @@ export default function CmsIptvChannelsScreen({
         setSidebarIdx(0);
         sidebarIdxRef.current = 0;
         setChStatus('ready');
-        setBuffering(true);
       } else {
         setChStatus('error');
         setChError(res.message || 'Could not load channels');
@@ -316,21 +312,36 @@ export default function CmsIptvChannelsScreen({
       setSidebarIdx(idx);
       pausedRef.current = false;
       setPaused(false);
-      setBuffering(true);
       chSectionRef.current = 'player';
       setChSection('player');
     },
     [channels],
   );
 
+  const tryToggleFullscreen = useCallback(() => {
+    const now = Date.now();
+    if (now - lastFullscreenToggleAtRef.current < FULLSCREEN_TOGGLE_DEBOUNCE_MS) {
+      return;
+    }
+    lastFullscreenToggleAtRef.current = now;
+    const n = !isFullscreenRef.current;
+    isFullscreenRef.current = n;
+    setIsFullscreen(n);
+  }, []);
+
   const activeCh = channels.find(c => c.id === activeChId) ?? channels[0];
   const streamUri =
     activeCh && activeCh.stream_url.trim()
-      ? resolveCmsMediaUrl(activeCh.stream_url)
+      ? resolveCmsChannelStreamUrl(activeCh.stream_url)
       : '';
 
   const isOffline = (ch: IptvChannelRow) =>
     /offline|disabled|down/i.test(String(ch.status || ''));
+
+  useEffect(() => {
+    if (!isActive || step !== 'channels' || !streamUri) return;
+    console.log(streamUri);
+  }, [isActive, step, streamUri]);
 
   useEffect(() => {
     if (Platform.OS !== 'android' || !isActive) {
@@ -396,8 +407,7 @@ export default function CmsIptvChannelsScreen({
 
           if (isFullscreenRef.current) {
             if (kc === 23 || kc === 66 || kc === 109) {
-              isFullscreenRef.current = false;
-              setIsFullscreen(false);
+              tryToggleFullscreen();
             }
             return;
           }
@@ -437,9 +447,7 @@ export default function CmsIptvChannelsScreen({
 
           if (sec === 'player') {
             if (kc === 23 || kc === 66 || kc === 109) {
-              const n = !isFullscreenRef.current;
-              isFullscreenRef.current = n;
-              setIsFullscreen(n);
+              tryToggleFullscreen();
             } else if (kc === 19) {
               chSectionRef.current = 'backPkg';
               setChSection('backPkg');
@@ -460,13 +468,14 @@ export default function CmsIptvChannelsScreen({
     openPackage,
     goBackToPackages,
     selectChannel,
+    tryToggleFullscreen,
   ]);
 
   const renderHeader = () => (
     <View style={st.header}>
       <View style={st.brand}>
         <Image
-          source={require('../assets/images/ethiad-logo-marketing.png')}
+          source={require('../assets/header/ethiad-logo-marketing.png')}
           style={st.brandLogo}
           resizeMode="contain"
         />
@@ -559,6 +568,7 @@ export default function CmsIptvChannelsScreen({
           <ScrollView
             ref={pkgScrollRef}
             style={st.pkgScroll}
+            scrollEventThrottle={16}
             contentContainerStyle={st.pkgScrollContent}>
             {packages.map((pkg, i) => {
               const focused = pkgSection === 'list' && pkgIndex === i;
@@ -572,10 +582,10 @@ export default function CmsIptvChannelsScreen({
                   style={[st.pkgRow, focused && st.pkgRowFocused]}>
                   <View style={st.pkgThumbWrap}>
                     {uri ? (
-                      <Image
-                        source={{uri}}
+                      <FastImage
+                        source={{uri, priority: FastImage.priority.normal, cache: FastImage.cacheControl.immutable}}
                         style={st.pkgThumb}
-                        resizeMode="cover"
+                        resizeMode={FastImage.resizeMode.cover}
                       />
                     ) : (
                       <View style={[st.pkgThumb, st.pkgThumbPlaceholder]}>
@@ -618,7 +628,7 @@ export default function CmsIptvChannelsScreen({
         <View style={st.header}>
           <View style={st.brand}>
             <Image
-              source={require('../assets/images/ethiad-logo-marketing.png')}
+              source={require('../assets/header/ethiad-logo-marketing.png')}
               style={st.brandLogo}
               resizeMode="contain"
             />
@@ -718,6 +728,8 @@ export default function CmsIptvChannelsScreen({
               <ScrollView
                 ref={sidebarScrollRef}
                 showsVerticalScrollIndicator={false}
+                scrollEventThrottle={16}
+                removeClippedSubviews
                 style={st.sidebarScroll}>
                 {channels.map((ch, i) => {
                   const playing = ch.id === activeChId;
@@ -760,10 +772,10 @@ export default function CmsIptvChannelsScreen({
                           focused && st.sidebarLogoFocused,
                         ]}>
                         {logoUri ? (
-                          <Image
-                            source={{uri: logoUri}}
+                          <FastImage
+                            source={{uri: logoUri, priority: FastImage.priority.normal, cache: FastImage.cacheControl.immutable}}
                             style={st.logoImg}
-                            resizeMode="cover"
+                            resizeMode={FastImage.resizeMode.cover}
                           />
                         ) : (
                           <Text
@@ -794,39 +806,21 @@ export default function CmsIptvChannelsScreen({
               </ScrollView>
             </View>
 
-            <View
-              style={[
-                st.playerPane,
-                chSection === 'player' && st.playerPaneFocused,
-              ]}>
+            <View style={st.playerPane}>
               {streamUri ? (
                 <>
-                  {!isFullscreen && (
-                    <VLCPlayer
-                      style={StyleSheet.absoluteFill}
-                      source={{uri: streamUri}}
-                      videoAspectRatio="16:9"
-                      resizeMode="fill"
-                      paused={paused || !isActive || isOffline(activeCh)}
-                      volume={200}
-                      repeat
-                      onPlaying={() => setBuffering(false)}
-                      onError={() => setBuffering(false)}
-                    />
-                  )}
-                  {buffering &&
-                    !isFullscreen &&
-                    !paused &&
-                    !isOffline(activeCh) && (
-                      <View style={st.bufferOverlay}>
-                        <ActivityIndicator size="large" color={C.gold} />
-                        <Text style={st.bufferTxt}>Loading…</Text>
-                      </View>
-                    )}
-                  {isOffline(activeCh) && (
+                  {isOffline(activeCh) ? (
                     <View style={st.bufferOverlay}>
                       <Text style={st.bufferTxt}>Channel offline</Text>
                     </View>
+                  ) : (
+                    <VlcPlayer
+                      key={`cms-${streamUri}`}
+                      uri={streamUri}
+                      style={StyleSheet.absoluteFill as object}
+                      paused={paused || !isActive}
+                      channelName={activeCh.name}
+                    />
                   )}
                 </>
               ) : (
@@ -835,24 +829,27 @@ export default function CmsIptvChannelsScreen({
                 </View>
               )}
 
-              <View style={st.chBadgeOverlay}>
-                <PulseDot
-                  size={5}
-                  color={isOffline(activeCh) ? C.muted : C.live}
-                />
-                <Text style={st.chBadgeOverlayTxt} numberOfLines={1}>
-                  {activeCh.name}
-                </Text>
+              {/* Isolated hardware layer — keeps PulseDot animation out of the
+                  VLC TextureView compositing pass so it doesn't cause video jitter. */}
+              <View
+                style={StyleSheet.absoluteFill}
+                pointerEvents="box-none"
+                renderToHardwareTextureAndroid>
+                <View style={st.chBadgeOverlay}>
+                  <PulseDot
+                    size={5}
+                    color={isOffline(activeCh) ? C.muted : C.live}
+                  />
+                  <Text style={st.chBadgeOverlayTxt} numberOfLines={1}>
+                    {activeCh.name}
+                  </Text>
+                </View>
               </View>
               <TouchableOpacity
                 style={[st.fsBtn, chSection === 'player' && st.fsBtnFocused]}
                 activeOpacity={0.8}
                 focusable
-                onPress={() => {
-                  const n = !isFullscreenRef.current;
-                  isFullscreenRef.current = n;
-                  setIsFullscreen(n);
-                }}>
+                onPress={tryToggleFullscreen}>
                 <Text
                   style={[
                     st.fsBtnIcon,
@@ -867,62 +864,20 @@ export default function CmsIptvChannelsScreen({
       </View>
 
       {isFullscreen && streamUri && activeCh && !isOffline(activeCh) && (
-        <View style={st.fsOverlay}>
-          <VLCPlayer
-            style={StyleSheet.absoluteFill}
-            source={{uri: streamUri}}
-            videoAspectRatio="16:9"
-            resizeMode="fill"
-            paused={paused || !isActive}
-            volume={200}
-            repeat
-            onPlaying={() => setBuffering(false)}
-            onError={() => setBuffering(false)}
-          />
-          {buffering && !paused && (
-            <View style={st.bufferOverlayFs}>
-              <ActivityIndicator size="large" color={C.gold} />
-              <Text style={st.bufferTxt}>Loading…</Text>
-            </View>
-          )}
-          <View style={st.fsTopBar}>
-            <View style={st.fsTopLeft}>
-              <PulseDot size={6} color={C.gold} />
-              <Text style={st.fsNowTxt} numberOfLines={1}>
-                NOW PLAYING · {activeCh.name}
-              </Text>
-            </View>
-            <View style={st.fsTopRight}>
-              <Text style={st.fsTimeTxt}>
-                {pad(time.getHours())}:{pad(time.getMinutes())}
-              </Text>
-              <TouchableOpacity
-                style={[
-                  st.fsExitIconBtn,
-                  fsExitFocused && st.fsExitIconBtnActive,
-                ]}
-                activeOpacity={0.8}
-                focusable
-                onPress={() => {
-                  isFullscreenRef.current = false;
-                  setIsFullscreen(false);
-                }}
-                onFocus={() => setFsExitFocused(true)}
-                onBlur={() => setFsExitFocused(false)}>
-                <Text style={[st.fsExitIcon, fsExitFocused && {color: C.deep}]}>
-                  ✕
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
+        <VlcPlayer
+          key={`cms-fs-${streamUri}`}
+          uri={streamUri}
+          isFullscreen
+          paused={paused || !isActive}
+          channelName={activeCh.name}
+        />
       )}
     </View>
   );
 }
 
 const st = StyleSheet.create({
-  root: {flex: 1, backgroundColor: C.deep},
+  root: {flex: 1, backgroundColor: 'transparent'},
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1173,24 +1128,17 @@ const st = StyleSheet.create({
   offlineLbl: {fontFamily: FontFamily.book, color: C.muted, fontSize: 8},
   playerPane: {
     flex: 1,
+    alignSelf: 'stretch',
+    minWidth: 0,
     backgroundColor: '#000',
     position: 'relative',
     overflow: 'hidden',
   },
-  playerPaneFocused: {borderWidth: 2, borderColor: C.gold},
   bufferOverlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(0,0,0,0.55)',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 10,
-  },
-  bufferOverlayFs: {
-    position: 'absolute',
-    top: '50%' as any,
-    left: '50%' as any,
-    transform: [{translateX: -40}, {translateY: -40}],
-    alignItems: 'center',
     gap: 10,
   },
   bufferTxt: {
@@ -1246,51 +1194,7 @@ const st = StyleSheet.create({
     right: 0,
     bottom: 0,
     backgroundColor: C.deep,
-    justifyContent: 'space-between',
-  },
-  fsTopBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 36,
-    paddingTop: 28,
-    paddingBottom: 16,
-    backgroundColor: Colors.overlay.midnight[60],
-  },
-  fsTopLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    flex: 1,
-    marginRight: 16,
-  },
-  fsTopRight: {flexDirection: 'row', alignItems: 'center', gap: 16},
-  fsNowTxt: {
-    fontFamily: FontFamily.text,
-    color: C.gold,
-    fontSize: 11,
-    letterSpacing: 2,
-  },
-  fsTimeTxt: {
-    fontFamily: FontFamily.light,
-    color: C.text,
-    fontSize: 22,
-    letterSpacing: 2,
-  },
-  fsExitIconBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 4,
-    backgroundColor: Colors.overlay.gold[8],
-    borderWidth: 1,
-    borderColor: C.border,
-    alignItems: 'center',
     justifyContent: 'center',
   },
-  fsExitIconBtnActive: {
-    backgroundColor: C.gold,
-    borderColor: C.goldLight,
-    transform: [{scale: 1.08}],
-  },
-  fsExitIcon: {fontFamily: FontFamily.medium, color: C.gold, fontSize: 18},
 });
+

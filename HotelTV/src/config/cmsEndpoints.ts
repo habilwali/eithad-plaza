@@ -5,7 +5,7 @@
  * Full origin override (https or custom path):
  *   HOTEL_CMS_BASE_URL e.g. https://my-server.com
  */
-const CMS_HOST = process.env.HOTEL_CMS_HOST ?? '192.168.70.115';
+const CMS_HOST = process.env.HOTEL_CMS_HOST ?? '10.10.120.11';
 const CMS_HTTP_PORT = process.env.HOTEL_CMS_HTTP_PORT ?? '80';
 
 /** CMS HTTP origin without trailing slash (same host/port as index.php APIs). */
@@ -27,16 +27,64 @@ export function joinCmsHttpPath(path: string): string {
   return `${base}/${p}`;
 }
 
-/** Absolute http(s) URLs pass through; otherwise joined to CMS origin. */
+/**
+ * CMS sometimes stores multicast as a fake path: `/udp//@224.2.2.1` or `udp//@224.2.2.1`.
+ * Normalize to proper UDP multicast URL: `udp://@224.2.2.1` — do not prefix the HTTP CMS origin.
+ */
+function normalizeCmsStreamPath(trimmed: string): string {
+  const m = trimmed.match(/^\/?udp\/\/@(.+)$/i);
+  if (m) {
+    return `udp://@${m[1]}`;
+  }
+  return trimmed;
+}
+
+/** Absolute http(s) URLs pass through; streaming schemes (udp, rtsp, …) pass through;
+ *  relative paths join to CMS origin. */
 export function resolveCmsMediaUrl(relativeOrAbsolute: string): string {
-  const t = relativeOrAbsolute.trim();
+  let t = relativeOrAbsolute.trim();
   if (!t) {
     return '';
+  }
+  // DB may contain a mistaken full URL: http://cms:8080/udp//@224… — strip origin
+  const origin = getCmsHttpOrigin();
+  if (t.startsWith(`${origin}/`) && /\/udp\/\/@/i.test(t)) {
+    t = normalizeCmsStreamPath(t.slice(origin.length));
+  } else {
+    t = normalizeCmsStreamPath(t);
   }
   if (/^https?:\/\//i.test(t)) {
     return t;
   }
+  // udp://, rtsp://, rtp://, file://, etc. — not CMS-relative assets
+  if (/^[a-z][a-z0-9+.-]*:/i.test(t)) {
+    return t;
+  }
   return joinCmsHttpPath(t);
+}
+
+/**
+ * TV / Etihad channel video only: UDP multicast stream for STB.
+ * Non-udp results from `resolveCmsMediaUrl` (e.g. http(s), rtsp) are dropped — use "".
+ * Also recovers `http://anyhost/udp//@…` → `udp://@…` when the CMS stored a bad URL.
+ */
+export function resolveCmsChannelStreamUrl(raw: string): string {
+  let u = resolveCmsMediaUrl(raw).trim();
+  if (!u) {
+    return '';
+  }
+  if (/^udp:\/\//i.test(u)) {
+    return u;
+  }
+  const wrongHttp = u.match(/^https?:\/\/[^/]+(\/udp\/\/@.+)$/i);
+  if (wrongHttp) {
+    const inner = wrongHttp[1].replace(/^\/+/, '');
+    const m = inner.match(/^udp\/\/@(.+)$/i);
+    if (m) {
+      return `udp://@${m[1]}`;
+    }
+  }
+  return '';
 }
 
 /** GET welcome guest by device MAC (URL-encoded). */
@@ -51,12 +99,6 @@ export function buildGetPackagesUrl(mac: string): string {
   return `${getCmsHttpOrigin()}/api/getPackages.php?mac=${m}`;
 }
 
-/** Etihad TV packages for MAC (`get_etihad_packages.php`). */
-export function buildGetEtihadPackagesUrl(mac: string): string {
-  const m = encodeURIComponent(mac);
-  return `${getCmsHttpOrigin()}/api/get_etihad_packages.php?mac=${m}`;
-}
-
 /**
  * IPTV channels for a category/package (`getChannels.php`).
  * On production TV builds always pass `mac` so results match `channel_mac_map`.
@@ -67,6 +109,14 @@ export function buildGetChannelsUrl(categoryId: number, mac: string): string {
     String(categoryId),
   )}&mac=${m}`;
 }
+
+/** Etihad TV packages for MAC (`get_etihad_packages.php`). */
+export function buildGetEtihadPackagesUrl(mac: string): string {
+  const m = encodeURIComponent(mac);
+  return `${getCmsHttpOrigin()}/api/get_etihad_packages.php?mac=${m}`;
+}
+
+
 
 /** Etihad TV categories for MAC (`get_etihad_categories.php`). */
 export function buildGetEtihadCategoriesUrl(mac: string): string {
@@ -98,6 +148,11 @@ export function buildGetGuestFacilitiesUrl(
 /** Etihad Plaza TV home screen (`etihad-plaza/home.php`). */
 export function buildEtihadPlazaHomeUrl(): string {
   return `${getCmsHttpOrigin()}/api/etihad-plaza/home.php`;
+}
+
+/** Global app background image (`get_background_image.php`). */
+export function buildGetBackgroundImageApiUrl(): string {
+  return `${getCmsHttpOrigin()}/api/get_background_image.php`;
 }
 
 export const CMS_WS_URL = `ws://${CMS_HOST}:8765`;

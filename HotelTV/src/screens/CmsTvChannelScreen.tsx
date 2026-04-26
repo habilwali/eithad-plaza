@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import ChannelScreen from './ChannelScreen';
 import type {ChannelDataConfig, ChannelItem} from '../data/channelData';
-import {resolveCmsMediaUrl} from '../config/cmsEndpoints';
+import {resolveCmsChannelStreamUrl} from '../config/cmsEndpoints';
 import {FontFamily} from '../theme/typography';
 import {Colors} from '../theme/colors';
 import {getDeviceMacForWelcomeApi} from '../utils/getDeviceMacForWelcome';
@@ -48,7 +48,7 @@ function cmsRowToChannelItem(
     hd: true,
     live: !offline,
     color: hashHue(ch.name),
-    videoUrl: resolveCmsMediaUrl(ch.stream_url),
+    videoUrl: resolveCmsChannelStreamUrl(ch.stream_url),
   };
 }
 
@@ -124,11 +124,6 @@ export default function CmsTvChannelScreen({
       setConfig(null);
       const mac = await getDeviceMacForWelcomeApi();
       if (cancelled) {
-        return;
-      }
-      if (!mac) {
-        setLoadState('error');
-        setErrorMsg('Unable to read device MAC. Check network or overrides.');
         return;
       }
       const pkgRes = await fetchIptvPackages(mac);
@@ -260,3 +255,4 @@ const st = StyleSheet.create({
     letterSpacing: 2,
   },
 });
+

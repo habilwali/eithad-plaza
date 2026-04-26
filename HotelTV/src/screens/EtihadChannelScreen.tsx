@@ -6,6 +6,8 @@
 import React, {useEffect, useState} from 'react';
 import {
   ActivityIndicator,
+  BackHandler,
+  Platform,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -13,9 +15,11 @@ import {
 } from 'react-native';
 import ChannelScreen from './ChannelScreen';
 import type {ChannelDataConfig, ChannelItem} from '../data/channelData';
-import {resolveCmsMediaUrl} from '../config/cmsEndpoints';
+import {resolveCmsChannelStreamUrl} from '../config/cmsEndpoints';
 import {FontFamily} from '../theme/typography';
 import {Colors} from '../theme/colors';
+import {AppHeader} from '../components/common/AppHeader';
+import {useAppHeaderClock} from '../hooks/useAppHeaderClock';
 import {getDeviceMacForWelcomeApi} from '../utils/getDeviceMacForWelcome';
 import {
   fetchIptvChannels,
@@ -24,6 +28,7 @@ import {
   type IptvPackageRow,
   type IptvPackagesResult,
 } from '../services/iptvCmsApi';
+import {useRemoteKeys} from '../hooks/useRemoteKeys';
 
 function hashHue(name: string): string {
   let h = 0;
@@ -48,7 +53,7 @@ function cmsRowToChannelItem(
     hd: true,
     live: !offline,
     color: hashHue(ch.name),
-    videoUrl: resolveCmsMediaUrl(ch.stream_url),
+    videoUrl: resolveCmsChannelStreamUrl(ch.stream_url),
   };
 }
 
@@ -106,6 +111,7 @@ export default function EtihadChannelScreen({
   onBack,
   isActive = true,
 }: EtihadChannelScreenProps) {
+  const headerClock = useAppHeaderClock();
   const [reloadToken, setReloadToken] = useState(0);
   const [loadState, setLoadState] = useState<'loading' | 'ready' | 'error'>(
     'loading',
@@ -124,11 +130,6 @@ export default function EtihadChannelScreen({
       setConfig(null);
       const mac = await getDeviceMacForWelcomeApi();
       if (cancelled) {
-        return;
-      }
-      if (!mac) {
-        setLoadState('error');
-        setErrorMsg('Unable to read device MAC. Check network or overrides.');
         return;
       }
 
@@ -175,29 +176,66 @@ export default function EtihadChannelScreen({
     };
   }, [isActive, reloadToken]);
 
+  const onFallback = loadState !== 'ready';
+  useRemoteKeys({
+    isActive: isActive && onFallback,
+    onBack,
+  });
+
+  useEffect(() => {
+    if (Platform.OS !== 'android' || !isActive || !onFallback) {
+      return;
+    }
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      onBack();
+      return true;
+    });
+    return () => sub.remove();
+  }, [isActive, onFallback, onBack]);
+
   if (loadState === 'error') {
     return (
-      <View style={st.fallback}>
-        <Text style={st.errorTitle}>Channels unavailable</Text>
-        <Text style={st.errorBody}>{errorMsg}</Text>
-        <TouchableOpacity
-          style={st.retryBtn}
-          onPress={() => setReloadToken(t => t + 1)}
-          focusable>
-          <Text style={st.retryBtnTxt}>TRY AGAIN</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={st.backLink} onPress={onBack} focusable>
-          <Text style={st.backLinkTxt}>‹ BACK</Text>
-        </TouchableOpacity>
+      <View style={st.fallbackRoot}>
+        <AppHeader
+          date={headerClock.date}
+          time={headerClock.time}
+          temperature={headerClock.temperature}
+          weatherCondition={headerClock.weatherCondition}
+        />
+        <View style={st.fallback}>
+          <Text style={st.errorTitle}>Channels unavailable</Text>
+          <Text style={st.errorBody}>{errorMsg}</Text>
+          <TouchableOpacity
+            style={st.retryBtn}
+            onPress={() => setReloadToken(t => t + 1)}
+            focusable>
+            <Text style={st.retryBtnTxt}>TRY AGAIN</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={st.backLink}
+            onPress={onBack}
+            focusable
+            hasTVPreferredFocus>
+            <Text style={st.backLinkTxt}>‹ BACK</Text>
+          </TouchableOpacity>
+        </View>
       </View>
     );
   }
 
   if (loadState === 'loading' || !config) {
     return (
-      <View style={st.fallback}>
-        <ActivityIndicator size="large" color={Colors.primary} />
-        <Text style={st.fallbackTxt}>Loading TV channels…</Text>
+      <View style={st.fallbackRoot}>
+        <AppHeader
+          date={headerClock.date}
+          time={headerClock.time}
+          temperature={headerClock.temperature}
+          weatherCondition={headerClock.weatherCondition}
+        />
+        <View style={st.fallback}>
+          <ActivityIndicator size="large" color={Colors.primary} />
+          <Text style={st.fallbackTxt}>Loading TV channels…</Text>
+        </View>
       </View>
     );
   }
@@ -213,6 +251,10 @@ export default function EtihadChannelScreen({
 }
 
 const st = StyleSheet.create({
+  fallbackRoot: {
+    flex: 1,
+    backgroundColor: 'transparent',
+  },
   fallback: {
     flex: 1,
     backgroundColor: Colors.background.dark,
@@ -262,3 +304,4 @@ const st = StyleSheet.create({
     letterSpacing: 2,
   },
 });
+

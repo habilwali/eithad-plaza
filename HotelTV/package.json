@@ -17,7 +17,9 @@
     "axios": "^1.7.7",
     "react": "18.2.0",
     "react-native": "0.73.9",
+    "react-native-blob-util": "^0.19.4",
     "react-native-device-info": "^15.0.2",
+    "react-native-fast-image": "^8.6.3",
     "react-native-keyevent": "^0.3.2",
     "react-native-linear-gradient": "^2.8.3",
     "react-native-vlc-media-player": "^1.0.98"

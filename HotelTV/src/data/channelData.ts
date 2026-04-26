@@ -28,20 +28,21 @@ export interface ChannelDataConfig {
   sidebarTitle: string;
 }
 
-// Video URLs — shared sample streams
+// Demo entries only (CMS builds use `stream_url`). Static test stream (HLS) for dev checks.
+const STATIC_TEST_STREAM = 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8';
 const V = {
-  nasa_tv:   'https://ntv1.akamaized.net/hls/live/2014075/NASA-NTV1-HLS/master.m3u8',
-  dw_news:   'https://dwamdstream102.akamaized.net/hls/live/2015525/dwstream102/index.m3u8',
-  france24:  'https://stream.france24.com/hls/live/2037986/F24_EN_LO_HLS/master.m3u8',
-  tears:     'http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4',
-  blazes:    'http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
-  escapes:   'http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4',
-  fun:       'http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4',
-  joyrides:  'http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyrides.mp4',
-  meltdowns: 'http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerMeltdowns.mp4',
-  subaru:    'http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/SubaruOutbackOnStreetAndDirt.mp4',
-  vw:        'http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/VolkswagenGTIReview.mp4',
-  bullrun:   'http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/WeAreGoingOnBullrun.mp4',
+  nasa_tv:   STATIC_TEST_STREAM,
+  dw_news:   STATIC_TEST_STREAM,
+  france24:  STATIC_TEST_STREAM,
+  tears:     STATIC_TEST_STREAM,
+  blazes:    STATIC_TEST_STREAM,
+  escapes:   STATIC_TEST_STREAM,
+  fun:       STATIC_TEST_STREAM,
+  joyrides:  STATIC_TEST_STREAM,
+  meltdowns: STATIC_TEST_STREAM,
+  subaru:    STATIC_TEST_STREAM,
+  vw:        STATIC_TEST_STREAM,
+  bullrun:   STATIC_TEST_STREAM,
 };
 
 /** General TV channels — news, sports, documentary, etc. */

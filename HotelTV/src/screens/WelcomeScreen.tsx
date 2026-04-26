@@ -4,7 +4,7 @@
  * Typography: Etihad Altis (FontFamily) per brand guidelines.
  */
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   BackHandler,
   DeviceEventEmitter,
@@ -20,6 +20,8 @@ import {
 } from 'react-native';
 import { FontFamily } from '../theme/typography';
 import { Colors } from '../theme/colors';
+import { AppHeader } from '../components/common/AppHeader';
+import { useAppHeaderClock } from '../hooks/useAppHeaderClock';
 
 const { width: WINDOW_WIDTH, height: WINDOW_HEIGHT } = Dimensions.get('window');
 const DESIGN_WIDTH = 1280;
@@ -44,10 +46,9 @@ export interface WelcomeScreenProps {
   signatureTitle?: string;
   /** Shown on bottom bar, e.g. "Room NO: 101" or "Room NO: —". */
   roomNavLabel?: string;
+  /** Optional overrides; omit for live Open-Meteo weather in the header. */
   temperature?: number;
   weatherCondition?: string;
-  date?: string;
-  time?: string;
   activeNavIndex?: number;
   navItems?: NavItemData[];
   /** When true, filters out the notifications nav item (for testing when notifications feature is disabled) */
@@ -58,14 +59,14 @@ export interface WelcomeScreenProps {
 
 // ─── Default nav items (order as per spec) ───────────────────────────────────
 const DEFAULT_NAV_ITEMS: NavItemData[] = [
-  { id: '1', icon: 'health', label: 'OCCUPATIONAL\nHEALTH & SAFETY' },
-  { id: '2', icon: 'dining', label: 'DINING' },
-  { id: '3', icon: 'cart', label: 'HYPERMARKET' },
-  { id: '4', icon: 'plaza', label: 'EY PLAZA' },
-  { id: '5', icon: 'facilities', label: 'ETIHAD\nFACILITIES' },
-  { id: '6', icon: 'channel', label: 'ETIHAD\nCHANNEL' },
-  { id: '7', icon: 'tv', label: 'TV CHANNEL' },
-  { id: '8', icon: 'notifications', label: 'MESSAGES' },
+  { id: '1', icon: 'health', label: 'Occupational\nHealth & Safety' },
+  { id: '2', icon: 'dining', label: 'Dining' },
+  { id: '3', icon: 'cart', label: 'Hypermarket' },
+  { id: '4', icon: 'plaza', label: 'EY Plaza' },
+  { id: '5', icon: 'facilities', label: 'Etihad\nFacilities' },
+  { id: '6', icon: 'channel', label: 'Etihad\nChannel' },
+  { id: '7', icon: 'tv', label: 'TV Channel' },
+  { id: '8', icon: 'notifications', label: 'Messages' },
 ];
 
 // ─── Colors (Etihad brand — primary gold ~50%, secondary ~30%) ───────────────
@@ -74,126 +75,17 @@ const COLORS = {
   goldAlt: Colors.primaryLight,
   white: Colors.white,
   secondary: Colors.text.muted,
-  topBarBg: Colors.midnightDune[500],
-  topBarLabelStrip: Colors.midnightDune[700],
   overlay: Colors.overlay.black[45],
   navBg: Colors.background.dark,
   navDivider: Colors.overlay.white[35],
   activeNav: Colors.overlay.gold[75],
 };
 
-// ─── Sub-component: Dark overlay ─────────────────────────────────────────────
-function DarkOverlay() {
-  return (
-    <View style={[StyleSheet.absoluteFill, styles.darkOverlay]} pointerEvents="none" />
-  );
-}
-
-// ─── Sub-component: DateTime section (left zone) ─────────────────────────────
-function DateTimeSection({ date, time }: { date: string; time: string }) {
-  return (
-    <View style={styles.dateTimeSection}>
-      <Text style={styles.timeText}>{time}</Text>
-      <Text style={styles.dateText}>{date}</Text>
-    </View>
-  );
-}
-
-// ─── Sub-component: Weather section (center zone) ───────────────────────────
-function WeatherSection({
-  temperature,
-  weatherCondition,
-}: {
-  temperature: number;
-  weatherCondition: string;
-}) {
-  return (
-    <View style={styles.weatherSection}>
-      <View style={styles.weatherRow}>
-        <View style={styles.tempWrap}>
-          <Text style={styles.tempText}>{temperature}</Text>
-          <View style={styles.tempDegreeWrap}>
-            <Text style={styles.tempDegreeSymbol}>{'\u00B0'}</Text>
-            <Text style={styles.tempDegreeC}>C</Text>
-          </View>
-        </View>
-        <View style={styles.weatherIconWrap}>
-          <Text style={[styles.weatherCloud, { fontSize: s(32) }]}>{'\u2601\uFE0F'}</Text>
-          <Text style={[styles.weatherSun, { fontSize: s(28) }]}>{'\u2600\uFE0F'}</Text>
-        </View>
-      </View>
-      <Text style={styles.weatherCondition}>{weatherCondition}</Text>
-    </View>
-  );
-}
-
-// ─── Sub-component: Top bar ──────────────────────────────────────────────────
-function TopBar({
-  date,
-  time,
-  temperature,
-  weatherCondition,
-  onNotificationsPress,
-  notificationCount = 0,
-}: {
-  date: string;
-  time: string;
-  temperature: number;
-  weatherCondition: string;
-  onNotificationsPress?: () => void;
-  notificationCount?: number;
-}) {
-  return (
-    <View style={styles.topBar}>
-      {/* Dark top strip — labels aligned with content below */}
-      <View style={styles.topBarLabelStrip}>
-        <View style={styles.topBarLabelLeftWrap}>
-          <Text style={styles.topBarLabelText}>DATE AND TIME</Text>
-        </View>
-        <View style={styles.topBarLabelCenterWrap}>
-          <Text style={styles.topBarLabelText}>ACTUAL WEATHER</Text>
-        </View>
-        <View style={styles.topBarLabelRightWrap} />
-      </View>
-      {/* Main content row */}
-      <View style={styles.topBarContent}>
-        <View style={styles.topBarLeft}>
-          <DateTimeSection date={date} time={time} />
-        </View>
-        <View style={styles.topBarCenter}>
-          <WeatherSection temperature={temperature} weatherCondition={weatherCondition} />
-        </View>
-        <View style={styles.topBarRight}>
-          {onNotificationsPress != null && (
-            <TouchableHighlight
-              onPress={onNotificationsPress}
-              underlayColor={Colors.overlay.gold[15]}
-              style={styles.notificationBellBtn}
-              {...({ focusable: true } as any)}
-            >
-              <View style={styles.notificationBellWrap}>
-                <Text style={styles.notificationBellIcon}>{'\u{1F514}'}</Text>
-                {notificationCount > 0 && (
-                  <View style={styles.notificationBellBadge}>
-                    <Text style={styles.notificationBellBadgeText}>
-                      {notificationCount > 99 ? '99+' : notificationCount}
-                    </Text>
-                  </View>
-                )}
-              </View>
-            </TouchableHighlight>
-          )}
-        </View>
-      </View>
-    </View>
-  );
-}
 
 // ─── Sub-component: Welcome text ────────────────────────────────────────────
-function WelcomeText({
+const WelcomeText = React.memo(function WelcomeText({
   guestName,
-  welcomeMessage = 'Welcome',
-  signatureTitle,
+  welcomeMessage = 'Welcome home',  // fallback if API returns nothing
 }: {
   guestName: string;
   welcomeMessage?: string;
@@ -201,19 +93,14 @@ function WelcomeText({
 }) {
   return (
     <View style={styles.welcomeWrap}>
-      <Text style={styles.welcomeTitle}>
-        Welcome, {guestName},
-      </Text>
-      <Text style={styles.welcomeSubtitle}>to your home away from home</Text>
-      {signatureTitle ? (
-        <Text style={styles.welcomeSignature}>{signatureTitle}</Text>
-      ) : null}
+      <Text style={styles.welcomeTitle}>{welcomeMessage},</Text>
+      <Text style={styles.welcomeName}>{guestName}</Text>
     </View>
   );
-}
+});
 
 // ─── Nav icon renderer (all fit in fixed 48×48 box via StyleSheet) ───────────
-function NavIcon({ type }: { type: NavItemData['icon'] }) {
+const NavIcon = React.memo(function NavIcon({ type }: { type: NavItemData['icon'] }) {
   const iconColor = COLORS.white;
   const stroke = 2;
 
@@ -222,7 +109,7 @@ function NavIcon({ type }: { type: NavItemData['icon'] }) {
       return (
         <View style={styles.iconOuter}>
           <Image
-            source={require('../assets/health-menu.png')}
+            source={require('../assets/health-menu1.png')}
             style={styles.iconHealthImage}
             resizeMode="contain"
           />
@@ -295,16 +182,17 @@ function NavIcon({ type }: { type: NavItemData['icon'] }) {
             source={require('../assets/message-menu.png')}
             style={styles.iconMessageImage}
             resizeMode="contain"
+            fadeDuration={0}
           />
         </View>
       );
     default:
       return null;
   }
-}
+});
 
 // ─── Sub-component: Single nav item ─────────────────────────────────────────
-function NavItem({
+const NavItem = React.memo(function NavItem({
   item,
   index,
   totalItems,
@@ -335,16 +223,16 @@ function NavItem({
       onFocus={onFocus}
       underlayColor={isActive ? Colors.primaryDark : Colors.overlay.gold[35]}
       focusable
-      // hasTVPreferredFocus is an Android TV prop not yet in RN's TS types
       {...(isPreferredFocus ? ({ hasTVPreferredFocus: true } as any) : null)}
-      
     >
-      <View>
-        <View  style={[
-        styles.navItemTouch,
+      {/* Outer wrapper — gold bg covers icon + label when active */}
+      <View style={[
+        styles.navItemWrapper,
         isActive && styles.navItemActive,
         isFocused && styles.navItemFocused,
       ]}>
+        {/* Fixed-height icon row — all icons sit at exactly the same vertical position */}
+        <View style={styles.navIconBox}>
           <NavIcon type={item.icon} />
           {item.icon === 'notifications' && (
             <View style={styles.messagesCountBadge} pointerEvents="none">
@@ -354,19 +242,26 @@ function NavItem({
             </View>
           )}
         </View>
-        <View style={styles.navItemLabelWrap}>
-          <Text style={[styles.navItemLabel, isActive && styles.navItemLabelActive, {marginTop: s(20), textAlign: 'center'}]}>{item.label}</Text>
+        {/* Fixed-height label row — always starts at the same y position */}
+        <View style={styles.navLabelBox}>
+          <Text
+            style={[styles.navItemLabel, isActive && styles.navItemLabelActive]}
+            numberOfLines={2}
+            textBreakStrategy="simple"
+          >
+            {item.label}
+          </Text>
         </View>
       </View>
     </TouchableHighlight>
   );
-}
+});
 
 // ─── Sub-component: Bottom nav bar ──────────────────────────────────────────
 // Shows a sliding window of 7 items; scrolls when user navigates to next/prev.
 const VISIBLE_NAV_COUNT = 7;
 
-function BottomNavBar({
+const BottomNavBar = React.memo(function BottomNavBar({
   items,
   activeIndex,
   focusedIndex,
@@ -385,8 +280,14 @@ function BottomNavBar({
   onFocusIndex: (index: number) => void;
   onNavItemPress?: (item: NavItemData, index: number) => void;
 }) {
-  const goPrev = () => onFocusIndex(Math.max(0, focusedIndex - 1));
-  const goNext = () => onFocusIndex(Math.min(items.length - 1, focusedIndex + 1));
+  const goPrev = useCallback(
+    () => onFocusIndex(Math.max(0, focusedIndex - 1)),
+    [onFocusIndex, focusedIndex],
+  );
+  const goNext = useCallback(
+    () => onFocusIndex(Math.min(items.length - 1, focusedIndex + 1)),
+    [onFocusIndex, focusedIndex, items.length],
+  );
 
   // Sliding window: show only 7 items; when user moves, shift window to keep focused in view
   const visibleStart = Math.max(
@@ -396,28 +297,27 @@ function BottomNavBar({
   const visibleEnd = Math.min(visibleStart + VISIBLE_NAV_COUNT, items.length);
   const visibleItems = items.slice(visibleStart, visibleEnd);
 
+  // Stable per-item callbacks — only recreated when the visible window shifts,
+  // preventing NavItem (React.memo) from re-rendering due to new function refs.
+  const itemHandlers = useMemo(
+    () => visibleItems.map((item, localIndex) => {
+      const realIndex = visibleStart + localIndex;
+      return {
+        onPress: () => {
+          onSelectIndex(realIndex);
+          onNavItemPress?.(item, realIndex);
+        },
+        onFocus: () => onFocusIndex(realIndex),
+      };
+    }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [visibleStart, visibleEnd, onSelectIndex, onFocusIndex, onNavItemPress],
+  );
+
   return (
     <View style={styles.bottomNavBar}>
       {/* Room number — top left */}
       <Text style={styles.roomNoText}>{roomNavLabel}</Text>
-      {/* Gold line — below icons, above labels, spans full width */}
-      <View
-        style={{
-          position: 'absolute',
-          left: 0,
-          right: 0,
-          top: s(126),
-          paddingVertical: s(4),
-          justifyContent: 'center',
-        }}
-      >
-        <View
-          style={{
-            height: 2,
-            backgroundColor: Colors.primary,
-          }}
-        />
-      </View>
       {/* Left arrow — aligned with nav icon row */}
       <TouchableHighlight
         onPress={goPrev}
@@ -431,6 +331,7 @@ function BottomNavBar({
       <View style={styles.navRow}>
         {visibleItems.map((item, localIndex) => {
           const realIndex = visibleStart + localIndex;
+          const h = itemHandlers[localIndex];
           return (
             <NavItem
               key={item.id}
@@ -443,11 +344,8 @@ function BottomNavBar({
               isLast={realIndex === items.length - 1}
               isPreferredFocus={realIndex === focusedIndex}
               messageCount={messageCount}
-              onPress={() => {
-                onSelectIndex(realIndex);
-                onNavItemPress?.(item, realIndex);
-              }}
-              onFocus={() => onFocusIndex(realIndex)}
+              onPress={h.onPress}
+              onFocus={h.onFocus}
             />
           );
         })}
@@ -464,31 +362,16 @@ function BottomNavBar({
       </TouchableHighlight>
     </View>
   );
-}
+});
 
 // ─── Main component ────────────────────────────────────────────────────────
-function formatDate(d: Date): string {
-  const day = String(d.getDate()).padStart(2, '0');
-  const month = String(d.getMonth() + 1).padStart(2, '0');
-  const year = d.getFullYear();
-  return `${day}-${month}-${year}`;
-}
-
-function formatTime(d: Date): string {
-  const hours = String(d.getHours()).padStart(2, '0');
-  const mins = String(d.getMinutes()).padStart(2, '0');
-  return `${hours}:${mins}`;
-}
-
 export default function WelcomeScreen({
   guestName = 'Guest',
   welcomeMessage = 'Welcome',
   signatureTitle,
   roomNavLabel = 'Room NO: —',
-  temperature = 23,
-  weatherCondition = 'SUNNY',
-  date: dateProp,
-  time: timeProp,
+  temperature: temperatureProp,
+  weatherCondition: weatherConditionProp,
   activeNavIndex = 3,
   navItems: navItemsProp = DEFAULT_NAV_ITEMS,
   hideNotificationsNav = false,
@@ -502,23 +385,13 @@ export default function WelcomeScreen({
     ? navItemsProp.filter((item) => item.icon !== 'notifications')
     : navItemsProp;
 
-  const [currentDate, setCurrentDate] = useState(() => formatDate(new Date()));
-  const [currentTime, setCurrentTime] = useState(() => formatTime(new Date()));
-
-  useEffect(() => {
-    const tick = () => {
-      const now = new Date();
-      setCurrentDate(formatDate(now));
-      setCurrentTime(formatTime(now));
-    };
-    tick();
-    const interval = setInterval(tick, 1000);
-    return () => clearInterval(interval);
-  }, []);
-
-  // Always use real-time date/time on home screen
-  const date = currentDate;
-  const time = currentTime;
+  const headerClock = useAppHeaderClock({
+    ...(temperatureProp !== undefined ? { temperature: temperatureProp } : {}),
+    ...(weatherConditionProp !== undefined && weatherConditionProp.trim() !== ''
+      ? { weatherCondition: weatherConditionProp }
+      : {}),
+  });
+  const { date, time, temperature, weatherCondition } = headerClock;
 
   // Single atomic index — focus and selection are always the same value
   const [navIndex, setNavIndex] = React.useReducer(
@@ -573,56 +446,13 @@ export default function WelcomeScreen({
 
   const content = (
     <>
-      <DarkOverlay />
-      <TopBar
+      {/* Header — logo left, time/weather right */}
+      <AppHeader
         date={date}
         time={time}
         temperature={temperature}
         weatherCondition={weatherCondition}
-        onNotificationsPress={onNotificationsPress}
-        notificationCount={notificationCount}
       />
-      {/* Logo — absolute, top of screen, always fully visible */}
-      <View
-        style={{
-          position: 'absolute',
-          top: s(20),
-          right: s(6.5),
-          width: s(340),
-          height: s(200),
-          zIndex: 10,
-          justifyContent: 'center',
-          alignItems: 'center',
-        }}
-      >
-        <View style={{ position: 'relative', alignItems: 'center', justifyContent: 'center', width: s(340), height: s(200) }}>
-          <Image
-            source={require('../assets/images/etihad-logo-white.png')}
-            style={{ width: s(340), height: s(200) }}
-            resizeMode="contain"
-          />
-          <View
-            style={[
-              StyleSheet.absoluteFillObject,
-              { justifyContent: 'center', alignItems: 'center' },
-            ]}
-          >
-            <Image
-              source={require('../assets/images/etihad-text-white-logo.png')}
-              style={{
-                position: 'absolute',
-                width: s(170),
-                height: s(45),
-                top: 48,
-                right: 52,
-                alignSelf: 'center',
-                marginTop: -10,
-              }}
-              resizeMode="contain"
-            />
-          </View>
-        </View>
-      </View>
       <WelcomeText
         guestName={guestName}
         welcomeMessage={welcomeMessage}
@@ -663,185 +493,7 @@ const styles = StyleSheet.create({
     height: WINDOW_HEIGHT,
   },
   containerFallback: {
-    backgroundColor: Colors.background.dark,
-  },
-  darkOverlay: {
-    backgroundColor: COLORS.overlay,
-  },
-  topBar: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: s(120),
-    marginTop: s(20),
-    marginRight: s(20),
-    flexDirection: 'column',
-    overflow: 'hidden',
-  },
-  topBarLabelStrip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.topBarLabelStrip,
-    paddingVertical: s(6),
-  },
-  topBarLabelLeftWrap: {
-    paddingLeft: s(80),
-    minWidth: s(220),
-    justifyContent: 'center',
-  },
-  topBarLabelCenterWrap: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: s(20),
-  },
-  topBarLabelRightWrap: {
-    width: s(200),
-  },
-  topBarLabelText: {
-    fontFamily: FontFamily.medium,
-    fontSize: s(16),
-    color: COLORS.gold,
-    letterSpacing: 2,
-    textTransform: 'uppercase',
-  },
-  topBarContent: {
-    flexDirection: 'row',
-    alignItems: 'stretch',
-    backgroundColor: COLORS.overlay,
-    flex: 1,
-    minHeight: s(70),
-  },
-  topBarLeft: {
-    paddingLeft: s(40),
-    paddingVertical: s(10),
-    justifyContent: 'center',
-    minWidth: s(220),
-  },
-  topBarCenter: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: s(20),
-  },
-  topBarRight: {
-    width: s(200),
-    justifyContent: 'center',
-    alignItems: 'flex-end',
-  },
-  notificationBellBtn: {
-    width: s(44),
-    height: s(44),
-    borderRadius: s(22),
-    backgroundColor: Colors.overlay.white[8],
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  notificationBellWrap: {
-    position: 'relative',
-    justifyContent: 'center',
-    alignItems: 'center',
-    width: '100%',
-    height: '100%',
-  },
-  notificationBellIcon: {
-    fontSize: s(24),
-  },
-  notificationBellBadge: {
-    position: 'absolute',
-    top: -2,
-    right: -2,
-    minWidth: s(18),
-    height: s(18),
-    borderRadius: s(9),
-    backgroundColor: Colors.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 4,
-  },
-  notificationBellBadgeText: {
-    fontSize: s(10),
-    fontWeight: '700',
-    color: Colors.white,
-  },
-  dateTimeSection: {
-    flexDirection: 'column',
-    alignItems: 'center',
-    alignSelf: 'center',
-  },
-  timeText: {
-    fontFamily: FontFamily.light,
-    fontSize: s(36),
-    color: COLORS.gold,
-    lineHeight: s(46),
-    textAlign: 'center',
-  },
-  dateText: {
-    fontFamily: FontFamily.light,
-    fontSize: s(16),
-    color: COLORS.white,
-    marginTop: s(1),
-    textAlign: 'center',
-  },
-  weatherSection: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  weatherRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: s(8),
-  },
-  tempWrap: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-  },
-  tempText: {
-    fontFamily: FontFamily.light,
-    fontSize: s(36),
-    color: COLORS.white,
-  },
-  tempDegreeWrap: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-  },
-  tempDegreeSymbol: {
-    fontFamily: FontFamily.light,
-    fontSize: s(18),
-    color: COLORS.white,
-  },
-  tempDegreeC: {
-    fontFamily: FontFamily.light,
-    fontSize: s(18),
-    color: COLORS.gold,
-  },
-  weatherIconWrap: {
-    width: s(47),
-    height: s(36),
-    alignItems: 'center',
-    justifyContent: 'center',
-    position: 'relative',
-  },
-  weatherCloud: {
-    position: 'absolute',
-    opacity: 0.9,
-    right: s(20),
-    top: s(2),
-    
-  },
-  weatherSun: {
-    position: 'absolute',
-    opacity: 0.9,
-    marginLeft: s(15),
-    
-  },
-  weatherCondition: {
-    fontFamily: FontFamily.book,
-    fontSize: s(13),
-    color: COLORS.white,
-    textAlign: 'center',
-    marginTop: s(2),
+    backgroundColor: 'transparent',
   },
   welcomeWrap: {
     position: 'absolute',
@@ -852,25 +504,20 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   welcomeTitle: {
-    fontFamily: FontFamily.bold,
-    fontWeight: '800',
-    fontSize: s(64),
-    color: COLORS.white,
-    textAlign: 'center',
-  },
-  welcomeSubtitle: {
-    fontFamily: FontFamily.book,
-    fontSize: s(36),
-    color: 'rgba(255,255,255,0.9)',
-    textAlign: 'center',
-    marginTop: s(-8),
-  },
-  welcomeSignature: {
     fontFamily: FontFamily.medium,
-    fontSize: s(22),
-    color: 'rgba(255,255,255,0.75)',
+    fontSize: s(72),
+    color: Colors.white,
     textAlign: 'center',
-    marginTop: s(16),
+    includeFontPadding: false,
+    lineHeight: s(76),
+  },
+  welcomeName: {
+    fontFamily: FontFamily.medium,
+    fontSize: s(72),
+    color: Colors.white,
+    textAlign: 'center',
+    includeFontPadding: false,
+    lineHeight: s(76),
   },
   bottomNavBar: {
     position: 'absolute',
@@ -878,68 +525,80 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: s(190),
-    marginBottom: s(28),
-    backgroundColor: COLORS.overlay,
+    marginBottom: s(40),
+    backgroundColor: 'rgba(40,52,62,0.88)',
     flexDirection: 'row',
     alignItems: 'center',
   },
   roomNoText: {
     position: 'absolute',
-    top: s(-25),
+    top: s(-32),
     left: s(24),
     fontFamily: FontFamily.bold,
     fontSize: s(20),
     color: COLORS.white,
     letterSpacing: 1,
+    includeFontPadding: false,
   },
   navArrow: {
     width: s(48),
-    height: s(200),
+    height: s(190),
     alignItems: 'center',
-    justifyContent: 'flex-start',
-    paddingTop: s(0),
-    marginBottom: s(30),
+    justifyContent: 'center',
   },
   navArrowIconBox: {
-    width: s(122),
-    height: s(122),
     alignItems: 'center',
     justifyContent: 'center',
   },
   navArrowIcon: {
-    fontSize: s(120),
+    fontSize: s(100),
+    lineHeight: s(100),
     color: COLORS.white,
     fontWeight: '300',
+    includeFontPadding: false,
+    textAlignVertical: 'center',
   },
   navRow: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-evenly',
-    
   },
-  navItemTouch: {
+  navItemWrapper: {
     width: s(165),
     minWidth: s(165),
-    height: s(100),
-    minHeight: s(100),
-    paddingVertical: s(8),
-    borderRadius: 4,
+    height: s(190),
+    paddingHorizontal: s(8),
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  navIconBox: {
+    width: s(80),
+    height: s(80),
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+  },
+  navItemTouch: {
+    width: '100%',
+    height: s(80),
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',
   },
   messagesCountBadge: {
     position: 'absolute',
-    top: s(16),
-    right: s(40),
+    top: s(-4),
+    right: s(4),
     minWidth: s(22),
     height: s(22),
     borderRadius: s(11),
-    backgroundColor: Colors.primary,
+    backgroundColor: '#826332',
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: s(5),
+    zIndex: 10,
   },
   messagesCountBadgeText: {
     fontFamily: FontFamily.bold,
@@ -955,26 +614,28 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     overflow: 'hidden',
   },
-  navItemLabelWrap: {
+  navLabelBox: {
     width: '100%',
-    minHeight: s(56),
+    height: s(44),
     alignItems: 'center',
     justifyContent: 'center',
+    marginTop: s(6),
+  },
+  navItemLabelWrap: {
+    width: '100%',
+    height: s(44),
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    marginTop: s(6),
   },
   navItemActive: {
-    backgroundColor: Colors.primaryDark,
-    fontFamily: FontFamily.bold,
-    borderRadius: 4,
+    backgroundColor: Colors.primary,
   },
   navItemActiveInner: {
-    backgroundColor: Colors.primaryDark,
-    borderRadius: 4,
+    backgroundColor: Colors.primary,
     overflow: 'hidden',
   },
   navItemFocused: {
-    borderWidth: 2,
-    borderRadius: 8,
-    borderColor: COLORS.white,
     transform: [{ scale: 1.05 }],
   },
   navItemInner: {
@@ -984,23 +645,20 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   navItemLabel: {
-    fontFamily: FontFamily.text,
+    fontFamily: FontFamily.book,
     fontSize: s(14),
-    // color: Colors.jebelGrey[400],
     color: Colors.white,
     textAlign: 'center',
-    letterSpacing: 1.5,
-    textTransform: 'uppercase',
+    width: '100%',
   },
   navItemLabelActive: {
-    color: Colors.white,
-    fontFamily: FontFamily.book,
-    fontWeight: '900',
+    fontFamily: FontFamily.text,
     fontSize: s(14),
+    color: Colors.white,
   },
   iconOuter: {
-    width: s(64),
-    height: s(64),
+    width: s(72),
+    height: s(72),
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -1121,28 +779,28 @@ const styles = StyleSheet.create({
     left: s(9),
   },
   iconHealthImage: {
-    width: s(52),
-    height: s(52),
+    width: s(72),
+    height: s(72),
     alignSelf: 'center',
   },
   iconFacilitiesImage: {
-    width: s(52),
-    height: s(52),
+    width: s(72),
+    height: s(72),
     alignSelf: 'center',
   },
   iconChannelImage: {
-    width: s(52),
-    height: s(52),
+    width: s(72),
+    height: s(72),
     alignSelf: 'center',
   },
   iconTvImage: {
-    width: s(52),
-    height: s(52),
+    width: s(72),
+    height: s(72),
     alignSelf: 'center',
   },
   iconMessageImage: {
-    width: s(52),
-    height: s(52),
+    width: s(72),
+    height: s(72),
     alignSelf: 'center',
   },
   iconNotificationsText: {
@@ -1158,13 +816,13 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
   },
   iconPlazaImage: {
-    width: s(52),
-    height: s(52),
+    width: s(72),
+    height: s(72),
     alignSelf: 'center',
   },
   iconCartImage: {
-    width: s(52),
-    height: s(52),
+    width: s(72),
+    height: s(72),
     alignSelf: 'center',
   },
   iconMonitor: {
@@ -1226,8 +884,9 @@ const styles = StyleSheet.create({
     right: s(9),
   },
   iconDiningImage: {
-    width: s(52),
-    height: s(52),
+    width: s(72),
+    height: s(72),
     alignSelf: 'center',
   },
 });
+

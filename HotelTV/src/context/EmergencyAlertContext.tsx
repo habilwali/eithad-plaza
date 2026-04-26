@@ -55,3 +55,4 @@ export const EmergencyAlertProvider: React.FC<{ children: React.ReactNode }> = (
     </EmergencyAlertContext.Provider>
   );
 };
+

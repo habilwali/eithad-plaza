@@ -1,12 +1,18 @@
 /**
- * Optional: skip all hardware detection and use this MAC for the Welcome API only.
+ * Default device identity when the TV does not expose a hardware MAC (common on Android TV)
+ * or for iOS/dev. Used app-wide: Welcome, IPTV, Etihad TV, facilities, etc.
+ * Must exist in CMS (`clients.mac_address`) for APIs that validate the MAC.
+ */
+export const DEFAULT_DEVICE_MAC = 'A8:2C:3E:7C:32:A9';
+
+/**
+ * Optional: skip all hardware detection and use this MAC everywhere.
  * Must match `clients.mac_address` in the CMS. Example: 'D4:1B:81:CD:74:F7'
  */
 export const WELCOME_DEVICE_MAC_OVERRIDE = '';
 
 /**
- * When override is empty and the TV does not expose a readable MAC (common on Android TV),
- * set this to the same MAC you store in the CMS (e.g. from Settings → About or the device sticker).
- * If this stays empty and hardware MAC is null, the Welcome API is **not** called.
+ * After hardware probe fails, use this MAC (defaults to {@link DEFAULT_DEVICE_MAC}).
+ * Set to another value if this deployment maps “unknown MAC” to a different CMS row.
  */
-export const WELCOME_MAC_FALLBACK_AFTER_PROBE = '';
+export const WELCOME_MAC_FALLBACK_AFTER_PROBE = DEFAULT_DEVICE_MAC;

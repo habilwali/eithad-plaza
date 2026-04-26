@@ -23,3 +23,19 @@ export function formatDate(d: Date): string {
 export function getTimeStr(d: Date = new Date()): string {
   return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
+
+/** Matches WelcomeScreen / AppHeader — e.g. "19 Feb 2026" */
+const HEADER_MONTHS = [
+  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+] as const;
+
+export function formatHeaderDate(d: Date = new Date()): string {
+  const day = String(d.getDate()).padStart(2, '0');
+  const month = HEADER_MONTHS[d.getMonth()];
+  return `${day} ${month} ${d.getFullYear()}`;
+}
+
+export function formatHeaderTime(d: Date = new Date()): string {
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}

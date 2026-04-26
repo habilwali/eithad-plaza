@@ -18,11 +18,11 @@ export type WelcomeGuestUiState =
   | { status: 'ready'; source: 'fallback'; reason?: string };
 
 const FALLBACK_NAME = 'Guest';
-const FALLBACK_WELCOME = 'Welcome';
+const FALLBACK_WELCOME = 'Welcome home';
 
 /**
  * Loads welcome copy from CMS when `enabled` (e.g. after splash).
- * Falls back to generic labels on error, missing MAC, or offline.
+ * Falls back to generic labels on API error or offline (MAC always resolved via `getDeviceMacForWelcomeApi`).
  */
 export function useWelcomeGuest(enabled: boolean) {
   const [state, setState] = useState<WelcomeGuestUiState>({ status: 'idle' });
@@ -44,22 +44,7 @@ export function useWelcomeGuest(enabled: boolean) {
         if (cancelled) return;
 
         // Metro + adb logcat: filter tag "WelcomeGuest" or search "mac_address"
-        console.log(
-          '[WelcomeGuest] mac_address for CMS:',
-          mac ?? '(none — set WELCOME_DEVICE_MAC_OVERRIDE or use a device that exposes a real MAC)',
-        );
-
-        if (!mac) {
-          console.log(
-            '[WelcomeGuest] Welcome API not called: no MAC. Set WELCOME_DEVICE_MAC_OVERRIDE or WELCOME_MAC_FALLBACK_AFTER_PROBE in src/config/welcomeDevice.ts',
-          );
-          setState({
-            status: 'ready',
-            source: 'fallback',
-            reason: 'no_mac',
-          });
-          return;
-        }
+        console.log('[WelcomeGuest] mac_address for CMS:', mac);
 
         const cached = readWelcomeGuestCache(mac);
         if (cached) {

@@ -15,5 +15,5 @@
       "@utils/*": ["utils/*"]
     }
   },
-  "include": ["src", "App.tsx", "react-native-vlc-media-player.d.ts"]
+  "include": ["src", "App.tsx"]
 }

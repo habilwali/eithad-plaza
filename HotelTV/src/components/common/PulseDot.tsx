@@ -22,8 +22,8 @@ export const PulseDot = React.memo(function PulseDot({
   useEffect(() => {
     Animated.loop(
       Animated.sequence([
-        Animated.timing(anim, { toValue: 0.3, duration: 850, useNativeDriver: true }),
-        Animated.timing(anim, { toValue: 1, duration: 850, useNativeDriver: true }),
+        Animated.timing(anim, { toValue: 0.3, duration: 1100, useNativeDriver: true }),
+        Animated.timing(anim, { toValue: 1, duration: 1100, useNativeDriver: true }),
       ])
     ).start();
   }, [anim]);
@@ -42,3 +42,4 @@ export const PulseDot = React.memo(function PulseDot({
 const styles = StyleSheet.create({
   dot: {},
 });
+

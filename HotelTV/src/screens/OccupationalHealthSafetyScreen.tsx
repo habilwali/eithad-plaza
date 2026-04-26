@@ -44,36 +44,32 @@ import LinearGradient from 'react-native-linear-gradient';
 import { FontFamily } from '../theme/typography';
 import { Colors } from '../theme/colors';
 import { BackButton, PulseDot } from '../components/common';
-import { getClockStr, getDateStr } from '../utils/dateTime';
-import VLCPlayer from 'react-native-vlc-media-player/VLCPlayer';
+import { AppHeader } from '../components/common/AppHeader';
+import { useAppHeaderClock } from '../hooks/useAppHeaderClock';
+import VlcPlayer from '../components/VlcPlayer';
 
 /* ─── DIMENSIONS ─────────────────────────────────────────── */
 const { width: SW, height: SH } = Dimensions.get('window');
 
-const TOPBAR_H   = 78;
 const BOTTOM_H   = 52;
 const H_PAD      = 40;
-const CONTENT_H  = SH - TOPBAR_H - BOTTOM_H;
 const DETAIL_W   = Math.round(SW * 0.29);
 const LEFT_W     = SW - H_PAD * 2 - DETAIL_W - 16;
 const CARD_STRIP = 130;          // height of thumbnail strip
-const PLAYER_H   = CONTENT_H - CARD_STRIP - 32 - 16; // 32 = strip margin-top, 16 = padding
 const CARD_W     = Math.round((LEFT_W - 5 * 10) / 6); // 6 cards, 10px gap
 
-/* ─── THEME ──────────────────────────────────────────────── */
+/* ─── THEME (Facilities-aligned — white body copy + Etihad gold accents) ─── */
 const C = {
-  bg:      Colors.background.dark,
-  surface: Colors.midnightDune?.[600] ?? '#1A1A22',
-  gold:    Colors.primary,
-  gold2:   Colors.primaryLight,
-  text:    Colors.text.light,
-  muted:   Colors.text.muted,
-  border:  Colors.overlay?.border?.gold20 ?? 'rgba(200,170,127,0.2)',
-  sep:     'rgba(255,255,255,0.07)',
-  red:     '#C8443A',
-  green:   '#4CAF7D',
-  blue:    '#4A9FD4',
-  amber:   '#D4960A',
+  bg: Colors.background.dark,
+  surface: Colors.midnightDune[600],
+  gold: Colors.primary,
+  gold2: Colors.primaryLight,
+  text: Colors.text.light,
+  border: Colors.overlay.gold[15],
+  red: '#C8443A',
+  green: '#4CAF7D',
+  blue: '#4A9FD4',
+  amber: '#D4960A',
 };
 
 type ContentType = 'VIDEO' | 'PDF' | 'INFO' | 'TRAINING' | 'EMERGENCY' | 'POLICY';
@@ -315,7 +311,12 @@ const DetailPanel = React.memo(function DetailPanel({ item }: { item: OHSItem })
 
       <View style={st.detailDivider} />
 
-      <ScrollView style={st.detailScroll} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        style={st.detailScroll}
+        contentContainerStyle={st.detailScrollContent}
+        showsVerticalScrollIndicator={true}
+        scrollEnabled
+        bounces={false}>
         {/* Description */}
         <Text style={st.detailDesc}>{item.desc}</Text>
 
@@ -353,8 +354,8 @@ const DetailPanel = React.memo(function DetailPanel({ item }: { item: OHSItem })
 /* ─── MAIN SCREEN ────────────────────────────────────────── */
 export default function OccupationalHealthSafetyScreen({
   guestName        = 'Nancy',
-  temperature      = 23,
-  weatherCondition = 'SUNNY',
+  temperature: temperatureProp,
+  weatherCondition: weatherConditionProp,
   onBack,
   isActive         = false,
 }: OHSScreenProps) {
@@ -362,9 +363,13 @@ export default function OccupationalHealthSafetyScreen({
   const [activeIdx,  setActiveIdx]  = useState(0);
   const [focusIdx,   setFocusIdx]   = useState(0);   // 0-5 = cards, 6 = back
   const [navSection, setNavSection] = useState<NavSection>('cards');
-  const [videoPaused, setVideoPaused] = useState(false);
-  const [clock, setClock] = useState(getClockStr());
-  const [date,  setDate]  = useState(getDateStr());
+  const { date, time, temperature: headerTemp, weatherCondition: headerWeather } =
+    useAppHeaderClock({
+      ...(temperatureProp !== undefined ? {temperature: temperatureProp} : {}),
+      ...(weatherConditionProp !== undefined && weatherConditionProp.trim() !== ''
+        ? {weatherCondition: weatherConditionProp}
+        : {}),
+    });
 
   const activeIdxRef  = useRef(0);
   const focusIdxRef   = useRef(0);
@@ -373,16 +378,10 @@ export default function OccupationalHealthSafetyScreen({
   onBackRef.current   = onBack;
 
   useEffect(() => {
-    const t = setInterval(() => { setClock(getClockStr()); setDate(getDateStr()); }, 60_000);
-    return () => clearInterval(t);
-  }, []);
-
-  useEffect(() => {
     if (isActive) {
       activeIdxRef.current  = 0; setActiveIdx(0);
       focusIdxRef.current   = 0; setFocusIdx(0);
       navSectionRef.current = 'cards'; setNavSection('cards');
-      setVideoPaused(false);
     }
   }, [isActive]);
 
@@ -391,7 +390,6 @@ export default function OccupationalHealthSafetyScreen({
     focusIdxRef.current  = idx;
     setActiveIdx(idx);
     setFocusIdx(idx);
-    setVideoPaused(false);
     navSectionRef.current = 'cards';
     setNavSection('cards');
   }, []);
@@ -437,53 +435,17 @@ export default function OccupationalHealthSafetyScreen({
 
   return (
     <View style={st.root}>
-      <StatusBar hidden />
+      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
 
-      {/* ── TOPBAR ── */}
-      <View style={st.topbar}>
-
-        {/* LEFT: weather + clock */}
-        <View style={st.topLeft}>
-          <View style={st.weatherRow}>
-            <Text style={st.sunIcon}>⛅</Text>
-            <View>
-              <View style={st.tempRow}>
-                <Text style={st.temp}>{temperature}</Text>
-                <Text style={st.tempUnit}>°C</Text>
-              </View>
-              <Text style={st.sunLabel}>{weatherCondition}</Text>
-            </View>
-          </View>
-          <View style={st.divV} />
-          <View style={st.clockWrap}>
-            <Text style={st.clockTime}>{clock}</Text>
-            <Text style={st.clockDate}>{date}</Text>
-          </View>
-        </View>
-
-        {/* CENTER: logo */}
-        <View style={st.topCenter}>
-          <Image
-            source={require('../assets/images/ethiad-logo-marketing.png')}
-            style={st.logo}
-            resizeMode="contain"
-          />
-        </View>
-
-        {/* RIGHT: page title */}
-        <View style={st.topRight}>
-          <Text style={st.pageSubtitle}>OCCUPATIONAL HEALTH</Text>
-          <Text style={st.pageTitle}>& Safety</Text>
-        </View>
-
-      </View>
-
-      {/* Gold separator */}
-      <LinearGradient
-        colors={['transparent', C.gold, 'transparent']}
-        start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
-        style={st.sep}
+      <AppHeader
+        date={date}
+        time={time}
+        temperature={headerTemp}
+        weatherCondition={headerWeather}
       />
+      <View style={st.headerTitleRow}>
+        <Text style={st.pageTitle}>OCCUPATIONAL HEALTH & SAFETY</Text>
+      </View>
 
       {/* ── MAIN CONTENT ── */}
       <View style={st.main}>
@@ -492,13 +454,12 @@ export default function OccupationalHealthSafetyScreen({
         <View style={st.leftCol}>
 
           {/* ── VIDEO / HERO PLAYER ── */}
-          <View style={[st.player, { height: PLAYER_H }]}>
-            <VLCPlayer
-              style={StyleSheet.absoluteFill}
-              source={{ uri: activeItem.videoUrl }}
-              videoAspectRatio="16:9"
-              resizeMode="fill"
-              paused={videoPaused || !isActive}
+          <View style={st.player}>
+            <VlcPlayer
+              key={`ohs-${activeItem.videoUrl}`}
+              uri={activeItem.videoUrl}
+              style={StyleSheet.absoluteFill as object}
+              paused={!isActive}
             />
 
             {/* Subtle gradient top → transparent for readability */}
@@ -570,9 +531,6 @@ export default function OccupationalHealthSafetyScreen({
           focused={navSection === 'back'}
           size="sm"
         />
-        <View style={st.navHintWrap}>
-          <Text style={st.navHint}>← →  Browse   ·   OK  Select   ·   ↓  Back   ·   ⌫  Exit</Text>
-        </View>
       </View>
 
     </View>
@@ -582,44 +540,27 @@ export default function OccupationalHealthSafetyScreen({
 /* ─── STYLES ─────────────────────────────────────────────── */
 const st = StyleSheet.create({
 
-  root: { flex: 1, backgroundColor: C.bg },
+  root: { flex: 1, backgroundColor: 'transparent' },
 
-  /* TOPBAR */
-  topbar: {
-    height: TOPBAR_H,
-    flexDirection: 'row',
+  headerTitleRow: {
     alignItems: 'center',
+    justifyContent: 'center',
+    paddingBottom: 8,
     paddingHorizontal: H_PAD,
   },
-  topLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    width: SW * 0.26,
-    gap: 12,
+  pageTitle: {
+    fontFamily: FontFamily.book,
+    fontSize: 24,
+    lineHeight: 30,
+    color: C.text,
+    letterSpacing: 0.4,
+    textAlign: 'center',
   },
-  weatherRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  tempRow:    { flexDirection: 'row', alignItems: 'flex-start' },
-  temp:       { fontFamily: FontFamily.bold,  fontSize: 22, color: C.text, lineHeight: 26 },
-  tempUnit:   { fontFamily: FontFamily.book,  fontSize: 11, color: C.gold, marginTop: 2, marginLeft: 1 },
-  sunLabel:   { fontFamily: FontFamily.light, fontSize: 7,  color: C.muted, letterSpacing: 1.5, textTransform: 'uppercase', marginTop: 2 },
-  sunIcon:    { fontSize: 30, lineHeight: 30 },
-  divV:       { width: 1, height: 30, backgroundColor: C.sep },
-  clockWrap:  { alignItems: 'flex-start' },
-  clockTime:  { fontFamily: FontFamily.light, fontSize: 22, color: C.gold, letterSpacing: 1.5, lineHeight: 26 },
-  clockDate:  { fontFamily: FontFamily.book,  fontSize: 8,  color: C.muted, letterSpacing: 0.8, marginTop: 2 },
-
-  topCenter: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  logo:      { width: 140, height: 46 },
-
-  topRight:    { width: SW * 0.26, alignItems: 'flex-end', justifyContent: 'center' },
-  pageSubtitle:{ fontFamily: FontFamily.medium, fontSize: 9,  color: C.gold,  letterSpacing: 2.5, textAlign: 'right' },
-  pageTitle:   { fontFamily: FontFamily.light,  fontSize: 20, color: C.text,  letterSpacing: 0.5, textAlign: 'right', marginTop: 3 },
-
-  sep: { height: 1 },
 
   /* MAIN */
   main: {
     flex: 1,
+    minHeight: 0,
     flexDirection: 'row',
     paddingHorizontal: H_PAD,
     paddingTop: 16,
@@ -629,10 +570,13 @@ const st = StyleSheet.create({
   leftCol: {
     flex: 1,
     flexDirection: 'column',
+    minHeight: 0,
   },
 
   /* VIDEO PLAYER */
   player: {
+    flex: 1,
+    minHeight: 0,
     width: '100%',
     borderRadius: 8,
     overflow: 'hidden',
@@ -650,8 +594,11 @@ const st = StyleSheet.create({
     borderWidth: 1, borderColor: 'rgba(200,68,58,0.3)',
   },
   playerLiveTxt: {
-    fontFamily: FontFamily.medium, color: C.text,
-    fontSize: 8, letterSpacing: 2,
+    fontFamily: FontFamily.book,
+    fontSize: 10,
+    lineHeight: 15,
+    letterSpacing: 0.2,
+    color: C.text,
   },
   playerTopRight: {
     position: 'absolute', top: 12, right: 14,
@@ -662,17 +609,35 @@ const st = StyleSheet.create({
     paddingHorizontal: 16, paddingTop: 40, paddingBottom: 14,
     gap: 12,
   },
-  playerIcon:         { fontSize: 28, marginBottom: 2 },
-  playerBottomText:   { flex: 1 },
-  playerTitle:        { fontFamily: FontFamily.medium, color: C.text,  fontSize: 16, letterSpacing: 0.3, marginBottom: 3 },
-  playerSubtitle:     { fontFamily: FontFamily.book,   color: C.gold,  fontSize: 9,  letterSpacing: 0.5 },
+  playerIcon: { fontSize: 28, marginBottom: 2 },
+  playerBottomText: { flex: 1 },
+  playerTitle: {
+    fontFamily: FontFamily.book,
+    fontSize: 13,
+    lineHeight: 18,
+    color: C.text,
+    letterSpacing: 0.2,
+    marginBottom: 2,
+  },
+  playerSubtitle: {
+    fontFamily: FontFamily.book,
+    fontSize: 10,
+    lineHeight: 15,
+    color: C.text,
+    letterSpacing: 0.2,
+  },
   playerVideoTag: {
     backgroundColor: 'rgba(74,159,212,0.22)',
     borderRadius: 3, paddingHorizontal: 10, paddingVertical: 5,
     borderWidth: 1, borderColor: 'rgba(74,159,212,0.35)',
     alignSelf: 'flex-end',
   },
-  playerVideoTagTxt: { fontFamily: FontFamily.medium, color: C.blue, fontSize: 8, letterSpacing: 2 },
+  playerVideoTagTxt: {
+    fontFamily: FontFamily.medium,
+    fontSize: 8,
+    letterSpacing: 1.2,
+    color: C.text,
+  },
 
   /* THUMBNAIL STRIP */
   strip: {
@@ -694,11 +659,6 @@ const st = StyleSheet.create({
   },
   thumbFocused: {
     borderColor: C.gold2,
-    shadowColor: C.gold,
-    shadowOpacity: 0.6,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 0 },
-    elevation: 10,
   },
   thumbActiveLine: {
     position: 'absolute', top: 0, left: 0, right: 0,
@@ -710,25 +670,33 @@ const st = StyleSheet.create({
   },
   thumbBottom:       { position: 'absolute', bottom: 0, left: 0, right: 0, padding: 8 },
   thumbIcon:         { fontSize: 14, marginBottom: 2 },
-  thumbLabel:        { fontFamily: FontFamily.book,   color: C.text,  fontSize: 8,  letterSpacing: 0.2, lineHeight: 11 },
-  thumbLabelActive:  { fontFamily: FontFamily.medium, color: C.gold2 },
+  thumbLabel: {
+    fontFamily: FontFamily.book,
+    fontSize: 10,
+    lineHeight: 15,
+    color: 'rgba(255,255,255,0.82)',
+    letterSpacing: 0.2,
+  },
+  thumbLabelActive: { fontFamily: FontFamily.text, color: C.text },
   thumbVideoBadge: {
     position: 'absolute', top: 8, right: 8,
     backgroundColor: 'rgba(0,0,0,0.6)',
     borderRadius: 2, width: 16, height: 16,
     alignItems: 'center', justifyContent: 'center',
   },
-  thumbVideoBadgeTxt: { color: C.blue, fontSize: 7 },
+  thumbVideoBadgeTxt: { color: C.text, fontSize: 8, fontFamily: FontFamily.book },
 
   /* TYPE PILL */
   pill:      { borderRadius: 3, paddingHorizontal: 8, paddingVertical: 3, alignSelf: 'flex-start', flexDirection: 'row' },
   pillSm:    { paddingHorizontal: 6, paddingVertical: 2 },
-  pillTxt:   { fontFamily: FontFamily.medium, fontSize: 8, letterSpacing: 1.2 },
+  pillTxt: { fontFamily: FontFamily.medium, fontSize: 8, letterSpacing: 1.2 },
   pillTxtSm: { fontSize: 7 },
 
   /* DETAIL PANEL */
   detail: {
     width: DETAIL_W,
+    minHeight: 0,
+    alignSelf: 'stretch',
     backgroundColor: 'rgba(12,12,18,0.6)',
     borderRadius: 8,
     borderWidth: 1,
@@ -746,18 +714,30 @@ const st = StyleSheet.create({
   detailIcon:      { fontSize: 28, marginTop: 2 },
   detailTitleText: { flex: 1, gap: 6 },
   detailName: {
-    fontFamily: FontFamily.medium,
-    fontSize: 14, color: C.text,
-    lineHeight: 19, letterSpacing: 0.2,
+    fontFamily: FontFamily.book,
+    fontSize: 13,
+    lineHeight: 18,
+    color: C.text,
+    letterSpacing: 0.2,
     marginTop: 4,
   },
   detailDivider: { height: 1, backgroundColor: C.border, marginHorizontal: 0 },
-  detailScroll:  { flex: 1, padding: 14 },
+  detailScroll: {
+    flex: 1,
+    minHeight: 0,
+  },
+  detailScrollContent: {
+    padding: 14,
+    paddingBottom: 24,
+  },
 
   detailDesc: {
     fontFamily: FontFamily.book,
-    fontSize: 10, color: C.muted,
-    lineHeight: 16, marginBottom: 12,
+    fontSize: 10,
+    lineHeight: 15,
+    color: C.text,
+    letterSpacing: 0.2,
+    marginBottom: 12,
   },
 
   /* Highlight */
@@ -771,16 +751,37 @@ const st = StyleSheet.create({
     marginBottom: 10,
   },
   highlightBar: { width: 2, borderRadius: 1, backgroundColor: C.gold, alignSelf: 'stretch' },
-  highlightTxt: { flex: 1, fontFamily: FontFamily.book, fontSize: 9, color: C.gold, lineHeight: 14, letterSpacing: 0.3 },
+  highlightTxt: {
+    flex: 1,
+    fontFamily: FontFamily.book,
+    fontSize: 10,
+    lineHeight: 15,
+    color: C.text,
+    letterSpacing: 0.2,
+  },
 
   /* Contact */
   contactRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 14 },
   contactIcon: { fontSize: 11 },
-  contactTxt:  { fontFamily: FontFamily.book, fontSize: 9, color: C.muted, letterSpacing: 0.3, flex: 1 },
+  contactTxt: {
+    fontFamily: FontFamily.book,
+    fontSize: 10,
+    lineHeight: 15,
+    color: C.text,
+    letterSpacing: 0.2,
+    flex: 1,
+  },
 
   /* Resources */
   resSection:      { gap: 0 },
-  resSectionTitle: { fontFamily: FontFamily.medium, fontSize: 7, color: C.gold, letterSpacing: 3, marginBottom: 8 },
+  resSectionTitle: {
+    fontFamily: FontFamily.book,
+    fontSize: 10,
+    lineHeight: 15,
+    color: C.text,
+    letterSpacing: 0.2,
+    marginBottom: 8,
+  },
   resRow: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
     paddingVertical: 6,
@@ -788,7 +789,14 @@ const st = StyleSheet.create({
   },
   resIconWrap:  { width: 24, height: 24, borderRadius: 4, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
   resIcon:      { fontSize: 10 },
-  resLabel:     { flex: 1, fontFamily: FontFamily.book, fontSize: 9, color: C.text, letterSpacing: 0.2 },
+  resLabel: {
+    flex: 1,
+    fontFamily: FontFamily.book,
+    fontSize: 10,
+    lineHeight: 15,
+    color: C.text,
+    letterSpacing: 0.2,
+  },
   resBadge:     { borderRadius: 3, paddingHorizontal: 5, paddingVertical: 2 },
   resBadgeTxt:  { fontFamily: FontFamily.medium, fontSize: 7, letterSpacing: 1 },
 
@@ -798,10 +806,5 @@ const st = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: H_PAD,
-    borderTopWidth: 1,
-    borderTopColor: C.sep,
-    gap: 16,
   },
-  navHintWrap: { flex: 1, alignItems: 'center' },
-  navHint:     { fontFamily: FontFamily.book, fontSize: 9, color: 'rgba(200,170,127,0.3)', letterSpacing: 1.5 },
 });

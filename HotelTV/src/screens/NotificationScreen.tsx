@@ -15,7 +15,8 @@ import {
   DeviceEventEmitter,
   Animated,
 } from 'react-native';
-import { BackButton } from '../components/common';
+import { AppHeader } from '../components/common/AppHeader';
+import { useAppHeaderClock } from '../hooks/useAppHeaderClock';
 import { useNotifications } from '../context/NotificationContext';
 import { Colors } from '../theme/colors';
 import { FontFamily } from '../theme/typography';
@@ -108,12 +109,7 @@ interface FilterTabProps {
   isFocused?: boolean;
 }
 
-const FilterTab: React.FC<FilterTabProps> = ({ label, active, onPress, isFocused }) => {
-  const scale = useRef(new Animated.Value(1)).current;
-  React.useEffect(() => {
-    Animated.spring(scale, { toValue: isFocused ? 1.08 : 1, useNativeDriver: true }).start();
-  }, [isFocused, scale]);
-
+const FilterTab: React.FC<FilterTabProps> = React.memo(({ label, active, onPress, isFocused }) => {
   return (
     <TouchableHighlight
       onPress={onPress}
@@ -121,21 +117,20 @@ const FilterTab: React.FC<FilterTabProps> = ({ label, active, onPress, isFocused
       style={styles.filterTabTouch}
       {...({ focusable: true } as any)}
     >
-      <Animated.View
+      <View
         style={[
           styles.filterTab,
           active && styles.filterTabActive,
           isFocused && styles.filterTabFocused,
-          { transform: [{ scale }] },
         ]}
       >
         <Text style={[styles.filterTabText, active && styles.filterTabTextActive, isFocused && styles.filterTabTextFocused]}>
           {label}
         </Text>
-      </Animated.View>
+      </View>
     </TouchableHighlight>
   );
-};
+});
 
 // ─── Notification Item ────────────────────────────────────────────────────────
 
@@ -146,32 +141,21 @@ interface NotifItemProps {
   onPress: () => void;
 }
 
-const NotifItem: React.FC<NotifItemProps> = ({ item, isSelected, isFocused, onPress }) => {
-  const scale = useRef(new Animated.Value(1)).current;
+const NotifItem: React.FC<NotifItemProps> = React.memo(({ item, isSelected, isFocused, onPress }) => {
   const bg = APP_COLORS[item.app] ?? APP_COLORS.default;
-
-  const handleFocus = () => {
-    Animated.spring(scale, { toValue: 1.02, useNativeDriver: true }).start();
-  };
-  const handleBlur = () => {
-    Animated.spring(scale, { toValue: 1, useNativeDriver: true }).start();
-  };
 
   return (
     <TouchableHighlight
       onPress={onPress}
-      onFocus={handleFocus}
-      onBlur={handleBlur}
       underlayColor="transparent"
       {...({ focusable: true } as any)}
     >
-      <Animated.View
+      <View
         style={[
           styles.notifItem,
           isSelected && styles.notifItemSelected,
           isFocused && styles.notifItemFocused,
           item.seen && styles.notifItemSeen,
-          { transform: [{ scale }] },
         ]}
       >
         {!item.seen && <View style={[styles.unreadBar, { backgroundColor: Colors.primary }]} />}
@@ -191,10 +175,10 @@ const NotifItem: React.FC<NotifItemProps> = ({ item, isSelected, isFocused, onPr
             {item.preview}
           </Text>
         </View>
-      </Animated.View>
+      </View>
     </TouchableHighlight>
   );
-};
+});
 
 // ─── Action Button ────────────────────────────────────────────────────────────
 
@@ -206,32 +190,20 @@ interface ActionBtnProps {
   isFocused?: boolean;
 }
 
-const ActionBtn: React.FC<ActionBtnProps> = ({ label, variant, onPress, hasTVPreferredFocus, isFocused }) => {
-  const scale = useRef(new Animated.Value(1)).current;
-
-  const handleFocus = () => {
-    Animated.spring(scale, { toValue: 1.06, useNativeDriver: true }).start();
-  };
-  const handleBlur = () => {
-    Animated.spring(scale, { toValue: 1, useNativeDriver: true }).start();
-  };
-
+const ActionBtn: React.FC<ActionBtnProps> = React.memo(({ label, variant, onPress, hasTVPreferredFocus, isFocused }) => {
   return (
     <TouchableHighlight
       onPress={onPress}
-      onFocus={handleFocus}
-      onBlur={handleBlur}
       underlayColor="transparent"
       {...({ focusable: true, ...(hasTVPreferredFocus ? { hasTVPreferredFocus: true } : {}) } as any)}
     >
-      <Animated.View
+      <View
         style={[
           styles.actionBtn,
           variant === 'primary' && styles.actionBtnPrimary,
           variant === 'danger' && styles.actionBtnDanger,
           variant === 'secondary' && styles.actionBtnSecondary,
           isFocused && styles.actionBtnFocused,
-          { transform: [{ scale }] },
         ]}
       >
         <Text
@@ -244,10 +216,10 @@ const ActionBtn: React.FC<ActionBtnProps> = ({ label, variant, onPress, hasTVPre
         >
           {label}
         </Text>
-      </Animated.View>
+      </View>
     </TouchableHighlight>
   );
-};
+});
 
 // ─── Detail Panel ─────────────────────────────────────────────────────────────
 
@@ -324,7 +296,7 @@ const KEYCODES = { BACK: 4, DPAD_UP: 19, DPAD_DOWN: 20, DPAD_LEFT: 21, DPAD_RIGH
 const KEY_THROTTLE_MS = 130; // Prevents rapid key repeat from causing jittery navigation when holding D-pad
 const SIDEBAR_HEADER_H = 140;
 const ITEM_H = { section: 36, notif: 92 };
-type NavZone = 'back' | 'filters' | 'list' | 'detail';
+type NavZone = 'filters' | 'list' | 'detail';
 
 export interface NotificationScreenProps {
   isActive: boolean;
@@ -332,6 +304,7 @@ export interface NotificationScreenProps {
 }
 
 const NotificationScreen: React.FC<NotificationScreenProps> = ({ isActive, onBack }) => {
+  const headerClock = useAppHeaderClock();
   const { notifications, markAsSeen, removeNotification, unreadCount } = useNotifications();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [filter, setFilter] = useState<FilterType>('all');
@@ -448,21 +421,6 @@ const NotificationScreen: React.FC<NotificationScreenProps> = ({ isActive, onBac
         return;
       }
 
-      if (zone === 'back') {
-        if (kc === KEYCODES.DPAD_DOWN) {
-          navZoneRef.current = 'filters';
-          setNavZone('filters');
-          filterIdxRef.current = 0;
-          setFilterIdx(0);
-          requestAnimationFrame(() => {
-            listRef.current?.scrollToOffset({ offset: 0, animated: false });
-          });
-        } else if (kc === KEYCODES.ENTER || kc === KEYCODES.SELECT) {
-          onBackRef.current?.();
-        }
-        return;
-      }
-
       if (zone === 'filters') {
         if (kc === KEYCODES.DPAD_LEFT) {
           const next = Math.max(0, fIdx - 1);
@@ -487,9 +445,6 @@ const NotificationScreen: React.FC<NotificationScreenProps> = ({ isActive, onBac
             detailIdxRef.current = 0;
             setDetailIdx(0);
           }
-        } else if (kc === KEYCODES.DPAD_UP) {
-          navZoneRef.current = 'back';
-          setNavZone('back');
         } else if (kc === KEYCODES.ENTER || kc === KEYCODES.SELECT) {
           setFilter(FILTERS[fIdx].value);
         }
@@ -620,9 +575,12 @@ const NotificationScreen: React.FC<NotificationScreenProps> = ({ isActive, onBac
     <View style={styles.safeArea}>
       <StatusBar barStyle="light-content" backgroundColor={Colors.background.dark} />
       <View style={styles.root}>
-        <View style={styles.headerRow}>
-          <BackButton onPress={onBack} size="sm" focused={navZone === 'back'} />
-        </View>
+        <AppHeader
+          date={headerClock.date}
+          time={headerClock.time}
+          temperature={headerClock.temperature}
+          weatherCondition={headerClock.weatherCondition}
+        />
         <View style={styles.contentRow}>
           <View style={styles.sidebar}>
             <FlatList
@@ -633,6 +591,12 @@ const NotificationScreen: React.FC<NotificationScreenProps> = ({ isActive, onBac
               ListHeaderComponent={ListHeader}
               renderItem={renderItem}
               showsVerticalScrollIndicator={false}
+              scrollEventThrottle={16}
+              removeClippedSubviews
+              maxToRenderPerBatch={4}
+              windowSize={3}
+              initialNumToRender={6}
+              updateCellsBatchingPeriod={50}
               contentContainerStyle={styles.listContent}
               onScrollToIndexFailed={() => {}}
               ListEmptyComponent={
@@ -661,19 +625,11 @@ const NotificationScreen: React.FC<NotificationScreenProps> = ({ isActive, onBac
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: Colors.background.dark,
+    backgroundColor: 'transparent',
   },
   root: {
     flex: 1,
-    backgroundColor: Colors.background.dark,
-  },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderBottomWidth: 0.5,
-    borderBottomColor: Colors.overlay.white[7],
+    backgroundColor: 'transparent',
   },
   contentRow: {
     flex: 1,
@@ -1038,3 +994,4 @@ const styles = StyleSheet.create({
 });
 
 export default NotificationScreen;
+

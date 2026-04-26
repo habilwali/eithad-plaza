@@ -1,6 +1,7 @@
 import { NativeModules, Platform } from 'react-native';
 import { getMacAddress } from 'react-native-device-info';
 import {
+  DEFAULT_DEVICE_MAC,
   WELCOME_DEVICE_MAC_OVERRIDE,
   WELCOME_MAC_FALLBACK_AFTER_PROBE,
 } from '../config/welcomeDevice';
@@ -30,6 +31,11 @@ export async function logHardwareMacDiagnostics(): Promise<void> {
 /** Uppercase MAC with colons, suitable for CMS `mac_address` matching. */
 export function normalizeMacForCms(mac: string): string {
   return mac.trim().toUpperCase();
+}
+
+function resolvedFallbackMac(): string {
+  const fromConfig = WELCOME_MAC_FALLBACK_AFTER_PROBE.trim();
+  return normalizeMacForCms(fromConfig || DEFAULT_DEVICE_MAC);
 }
 
 /**
@@ -68,10 +74,10 @@ function logMacResolve(t0: number, path: string): void {
 }
 
 /**
- * MAC for Welcome API: override → native (Ethernet + Wi‑Fi sysfs/NIC) → react-native-device-info.
- * Returns null if unavailable (caller should use generic welcome UI).
+ * MAC for all CMS calls: override → Android hardware probe → configured fallback → {@link DEFAULT_DEVICE_MAC}.
+ * Always returns a non-empty string (never null).
  */
-export async function getDeviceMacForWelcomeApi(): Promise<string | null> {
+export async function getDeviceMacForWelcomeApi(): Promise<string> {
   const t0 = Date.now();
 
   const override = WELCOME_DEVICE_MAC_OVERRIDE.trim();
@@ -81,11 +87,10 @@ export async function getDeviceMacForWelcomeApi(): Promise<string | null> {
   }
 
   if (Platform.OS !== 'android') {
-    logMacResolve(t0, 'non_android');
-    return null;
+    logMacResolve(t0, 'non_android_default');
+    return resolvedFallbackMac();
   }
 
-  // Run native sysfs/NIC scan and device-info in parallel — total wait ≈ max of the two, not sum.
   const [nativeMac, deviceInfoMac] = await Promise.all([
     getHardwareMacFromNative(),
     getMacFromDeviceInfo(),
@@ -101,15 +106,10 @@ export async function getDeviceMacForWelcomeApi(): Promise<string | null> {
 
   await logHardwareMacDiagnostics();
 
-  const fallback = WELCOME_MAC_FALLBACK_AFTER_PROBE.trim();
-  if (fallback.length > 0) {
-    console.log(
-      '[WelcomeGuest] hardware MAC unavailable — using WELCOME_MAC_FALLBACK_AFTER_PROBE for Welcome API',
-    );
-    logMacResolve(t0, 'fallback_config');
-    return normalizeMacForCms(fallback);
-  }
-
-  logMacResolve(t0, 'none');
-  return null;
+  const fallback = resolvedFallbackMac();
+  console.log(
+    '[WelcomeGuest] hardware MAC unavailable — using fallback MAC for CMS APIs',
+  );
+  logMacResolve(t0, 'fallback_config');
+  return fallback;
 }

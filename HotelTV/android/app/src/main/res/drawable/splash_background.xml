@@ -1,13 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Native window shown before JS loads — matches EtihadSplashScreen background + logo -->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
     <item>
-        <shape android:shape="rectangle">
-            <solid android:color="#1B1B1B" />
-        </shape>
+        <bitmap
+            android:gravity="fill"
+            android:src="@drawable/splash_bg" />
     </item>
-    <item
-        android:width="160dp"
-        android:height="50dp"
-        android:gravity="center"
-        android:drawable="@drawable/splash_logo" />
 </layer-list>

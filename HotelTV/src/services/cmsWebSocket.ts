@@ -19,7 +19,7 @@ function broadcastMessage(data: string) {
     try {
       h(data);
     } catch (e) {
-      if (__DEV__) console.warn('[CMS WS] message handler error', e);
+      if (__DEV__) console.log('[CMS WS] message handler error', e);
     }
   });
 }
@@ -29,7 +29,7 @@ function broadcastOpen() {
     try {
       h();
     } catch (e) {
-      if (__DEV__) console.warn('[CMS WS] onOpen handler error', e);
+      if (__DEV__) console.log('[CMS WS] onOpen handler error', e);
     }
   });
 }
@@ -82,7 +82,8 @@ function connectIfNeeded() {
     };
 
     socket.onerror = () => {
-      if (__DEV__) console.warn('[CMS WS] error');
+      // use console.log — console.warn triggers RN LogBox (yellow in-app bar)
+      if (__DEV__) console.log('[CMS WS] error');
       try {
         socket?.close();
       } catch {
