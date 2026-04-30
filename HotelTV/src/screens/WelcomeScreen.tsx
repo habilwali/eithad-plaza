@@ -93,8 +93,9 @@ const WelcomeText = React.memo(function WelcomeText({
 }) {
   return (
     <View style={styles.welcomeWrap}>
-      <Text style={styles.welcomeTitle}>{welcomeMessage},</Text>
-      <Text style={styles.welcomeName}>{guestName}</Text>
+      <Text style={styles.welcomeArabic}>{'حياكم'}</Text>
+      <Text style={styles.welcomeTitle}>{welcomeMessage}</Text>
+      {/* <Text style={styles.welcomeName}>{guestName}</Text> */}
     </View>
   );
 });
@@ -502,6 +503,15 @@ const styles = StyleSheet.create({
     top: WINDOW_HEIGHT * 0.35,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  welcomeArabic: {
+    fontFamily: FontFamily.medium,
+    fontSize: s(68),
+    color: Colors.white,
+    textAlign: 'center',
+    includeFontPadding: false,
+    lineHeight: s(76),
+    writingDirection: 'rtl',
   },
   welcomeTitle: {
     fontFamily: FontFamily.medium,

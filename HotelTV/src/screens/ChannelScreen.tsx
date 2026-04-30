@@ -41,7 +41,7 @@ const C = {
 
 const TAB_BAR_BG = 'rgba(40,52,62,0.88)';
 
-type Section = 'categories' | 'sidebar' | 'player';
+type Section = 'categories' | 'sidebar';
 
 export interface ChannelScreenProps {
   onBack: () => void;
@@ -81,6 +81,7 @@ export default function ChannelScreen({ onBack, isActive = true, config }: Chann
   const isFullscreenRef = useRef(false);
   /** Stops OK from firing twice in one press (TV remote + focused TouchableOpacity onPress). */
   const lastFullscreenToggleAtRef = useRef(0);
+  const autoSelectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const onBackRef       = useRef(onBack);
   onBackRef.current     = onBack;
 
@@ -185,6 +186,26 @@ export default function ChannelScreen({ onBack, isActive = true, config }: Chann
     });
   }, [sidebarIdx]);
 
+  const SIDEBAR_DEBOUNCE_MS = 350;
+
+  const cancelAutoSelect = useCallback(() => {
+    if (autoSelectTimerRef.current !== null) {
+      clearTimeout(autoSelectTimerRef.current);
+      autoSelectTimerRef.current = null;
+    }
+  }, []);
+
+  const scheduleSidebarAutoSelect = useCallback((idx: number) => {
+    cancelAutoSelect();
+    sidebarIdxRef.current = idx;
+    setSidebarIdx(idx);
+    autoSelectTimerRef.current = setTimeout(() => {
+      autoSelectTimerRef.current = null;
+      const ch = filteredRef.current[idx];
+      if (ch) { setActiveChId(ch.id); }
+    }, SIDEBAR_DEBOUNCE_MS);
+  }, [cancelAutoSelect]);
+
   const FULLSCREEN_TOGGLE_DEBOUNCE_MS = 420;
 
   const tryToggleFullscreen = useCallback(() => {
@@ -199,20 +220,28 @@ export default function ChannelScreen({ onBack, isActive = true, config }: Chann
   }, []);
 
   const selectChannel = useCallback((idx: number) => {
+    cancelAutoSelect();
     const ch = filteredRef.current[idx];
     if (!ch) return;
     setActiveChId(ch.id);
     sidebarIdxRef.current = idx; setSidebarIdx(idx);
-    sectionRef.current = 'player'; setSection('player');
-  }, []);
+  }, [cancelAutoSelect]);
 
   const selectCategory = useCallback((idx: number) => {
     const cat = categories[idx];
     if (!cat) return;
+    const newFiltered = cat.id === 'all' ? channels : channels.filter(c => c.cat === cat.id);
     setActiveCat(cat.id);
     catIndexRef.current   = idx; setCatIndex(idx);
     sidebarIdxRef.current = 0;   setSidebarIdx(0);
-  }, [categories]);
+    if (newFiltered.length > 0) { setActiveChId(newFiltered[0].id); }
+  }, [categories, channels]);
+
+  // Cancel pending auto-select when screen goes inactive or on unmount.
+  useEffect(() => {
+    if (!isActive) cancelAutoSelect();
+    return () => cancelAutoSelect();
+  }, [isActive, cancelAutoSelect]);
 
   useEffect(() => {
     if (Platform.OS !== 'android' || !isActive) return;
@@ -249,38 +278,28 @@ export default function ChannelScreen({ onBack, isActive = true, config }: Chann
         const total = filteredRef.current.length;
         if (kc === 19) {
           if (sidebarIdxRef.current === 0) {
+            cancelAutoSelect();
             sectionRef.current = 'categories'; setSection('categories');
             scrollViewRef.current?.scrollTo({ y: 0, animated: false });
           } else {
-            const n = sidebarIdxRef.current - 1;
-            sidebarIdxRef.current = n; setSidebarIdx(n);
+            scheduleSidebarAutoSelect(sidebarIdxRef.current - 1);
           }
         }
         else if (kc === 20) {
           if (sidebarIdxRef.current < total - 1) {
-            const n = sidebarIdxRef.current + 1;
-            sidebarIdxRef.current = n; setSidebarIdx(n);
+            scheduleSidebarAutoSelect(sidebarIdxRef.current + 1);
           }
         }
-        else if (kc === 22) { sectionRef.current = 'player'; setSection('player'); }
-        else if (kc === 23 || kc === 66 || kc === 109) { selectChannel(sidebarIdxRef.current); }
-        return;
-      }
-
-      if (sec === 'player') {
-        if (kc === 23 || kc === 66 || kc === 109) {
+        else if (kc === 22) { selectChannel(sidebarIdxRef.current); tryToggleFullscreen(); }
+        else if (kc === 23 || kc === 66 || kc === 109) {
+          selectChannel(sidebarIdxRef.current);
           tryToggleFullscreen();
         }
-        else if (kc === 19) {
-          sectionRef.current = 'categories'; setSection('categories');
-          scrollViewRef.current?.scrollTo({ y: 0, animated: false });
-        }
-        else if (kc === 21) { sectionRef.current = 'sidebar'; setSection('sidebar'); }
         return;
       }
     });
     return () => sub.remove();
-  }, [selectCategory, selectChannel, isActive, categories.length, tryToggleFullscreen]);
+  }, [selectCategory, selectChannel, isActive, categories.length, tryToggleFullscreen, cancelAutoSelect, scheduleSidebarAutoSelect]);
 
   const activeCh = channels.find(c => c.id === activeChId) ?? channels[0];
 
@@ -486,18 +505,13 @@ export default function ChannelScreen({ onBack, isActive = true, config }: Chann
             <Text style={st.chBadgeOverlayTxt}>CH {activeCh.id} · {activeCh.name}</Text>
           </View>
           <TouchableOpacity
-            style={[st.fsBtn, section === 'player' && st.fsBtnFocused]}
+            style={[st.fsBtn, st.fsBtnFocused]}
             activeOpacity={0.8}
             focusable
             onPress={tryToggleFullscreen}
           >
-            <Text style={[st.fsBtnIcon, section === 'player' && { color: C.deep }]}>⛶</Text>
+            <Text style={[st.fsBtnIcon, { color: C.deep }]}>⛶</Text>
           </TouchableOpacity>
-          {section === 'player' && (
-            <View style={st.playerFocusHint}>
-              <Text style={st.playerFocusHintTxt}>OK · Fullscreen  ←  Channels</Text>
-            </View>
-          )}
         </View>
       )}
     </View>

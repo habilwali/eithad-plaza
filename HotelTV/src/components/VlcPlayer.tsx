@@ -75,10 +75,23 @@ export interface VlcPlayerProps {
  *   Disables the subtitle / teletext parser that runs alongside the video decoder.
  *   Live IPTV channels rarely carry useful SPU data; disabling it frees CPU cycles.
  */
-const VLC_INIT: string[] = [
+// NOTE: if hard-crashes persist on channel switch, try moving mediacodec_ndk to the
+// END of the codec list (mediacodec,iomx,mediacodec_ndk,avcodec) so the safer
+// Java-side MediaCodec path is preferred on crash-prone budget SoCs.
+//
+// Frozen outside the component — never recreated on re-render. VlcPlayer spreads it
+// ([...VLC_INIT]) before passing to the native bridge so the library can .push()
+// onto a fresh mutable copy without hitting a frozen-array TypeError.
+const VLC_INIT: readonly string[] = Object.freeze([
   '--codec=mediacodec_ndk,mediacodec,iomx,avcodec',
   '--avcodec-hw=any',
-  '--avcodec-threads=0',
+  // Fixed at 2 — avcodec-threads=0 (auto) causes native decoder init crashes on
+  // some budget Amlogic/Realtek SoCs that miscalculate available core count.
+  '--avcodec-threads=2',
+  // Drop frames that arrive late instead of buffering them; prevents the decoder
+  // queue from growing unbounded during UDP bursts and avoids OOM-induced crashes.
+  '--drop-late-frames',
+  '--skip-frames',
   '--network-caching=2000',
   '--live-caching=2000',
   '--file-caching=2000',
@@ -87,7 +100,7 @@ const VLC_INIT: string[] = [
   '--audio-time-stretch',
   '--no-spu',
   '--no-stats',
-];
+]);
 
 const MAX_RETRIES = 3;
 const RETRY_MS    = 2500;
@@ -135,7 +148,10 @@ function VlcPlayer({
     }
   }, [vlcKey]);
 
-  // Full reset whenever the stream URI changes
+  // Full reset whenever the stream URI changes.
+  // setVlcKey is deferred via setImmediate so the old native VLC SurfaceView/TextureView
+  // has a full JS-frame to detach and release hardware decoder resources before the new
+  // instance is initialized — prevents hardware decoder collision crashes on channel switch.
   useEffect(() => {
     clearTimeout(timerRef.current);
     clearTimeout(stoppedTimerRef.current);
@@ -145,7 +161,12 @@ function VlcPlayer({
     }
     retriesRef.current = 0;
     setStatus('loading');
-    setVlcKey(k => k + 1);
+
+    // Nullify the ref so stale callbacks from the old instance cannot fire after unmount.
+    playerRef.current = null;
+
+    const id = setImmediate(() => setVlcKey(k => k + 1));
+    return () => clearImmediate(id);
   }, [uri]);
 
   useEffect(() => () => {
@@ -154,6 +175,8 @@ function VlcPlayer({
     if (visualFallbackRef.current != null) {
       clearTimeout(visualFallbackRef.current);
     }
+    // Nullify on unmount so any in-flight native callbacks cannot access a stale ref.
+    playerRef.current = null;
   }, []);
 
   const handleError = () => {
@@ -250,7 +273,7 @@ function VlcPlayer({
         <VLCPlayer
           ref={playerRef}
           key={`vlc-${vlcKey}`}
-          source={{ uri, initOptions: VLC_INIT }}
+          source={{ uri, initOptions: [...VLC_INIT] }}
           style={StyleSheet.absoluteFill}
           paused={paused || status === 'reconnecting'}
           repeat={false}

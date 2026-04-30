@@ -39,6 +39,7 @@ import {
   DeviceEventEmitter,
   ImageSourcePropType,
   ScrollView,
+  type LayoutChangeEvent,
 } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
 import { FontFamily } from '../theme/typography';
@@ -47,6 +48,7 @@ import { BackButton, PulseDot } from '../components/common';
 import { AppHeader } from '../components/common/AppHeader';
 import { useAppHeaderClock } from '../hooks/useAppHeaderClock';
 import VlcPlayer from '../components/VlcPlayer';
+import { fetchHealthSafetyItems } from '../services/healthSafetyApi';
 
 /* ─── DIMENSIONS ─────────────────────────────────────────── */
 const { width: SW, height: SH } = Dimensions.get('window');
@@ -83,8 +85,38 @@ const TYPE_META: Record<ContentType, { bg: string; color: string; icon: string; 
   POLICY:    { bg: 'rgba(212,150,10,0.22)',  color: C.amber, icon: '◈',  label: 'POLICY'    },
 };
 
+/* ─── ITEM TYPE ──────────────────────────────────────────── */
+export type OHSItem = {
+  id: string;
+  label: string;
+  type: ContentType;
+  icon: string;
+  img: string;
+  videoUrl: string;
+  hasVideo: boolean;
+  name: string;
+  desc: string;
+  contact: string;
+  highlight: string;
+  resources: Array<{ label: string; type: ContentType }>;
+};
+
+const VALID_CONTENT_TYPES = new Set<ContentType>(['VIDEO', 'PDF', 'INFO', 'TRAINING', 'EMERGENCY', 'POLICY']);
+function toContentType(v: unknown): ContentType {
+  const s = String(v ?? '').toUpperCase();
+  return (VALID_CONTENT_TYPES.has(s as ContentType) ? s : 'INFO') as ContentType;
+}
+
+/** Split a name into a two-line card label (≤2 words per line). */
+function splitLabel(name: string): string {
+  const words = name.trim().split(/\s+/);
+  if (words.length <= 2) return name;
+  const mid = Math.ceil(words.length / 2);
+  return `${words.slice(0, mid).join(' ')}\n${words.slice(mid).join(' ')}`;
+}
+
 /* ─── DATA ───────────────────────────────────────────────── */
-// Public domain / CC0 video sources
+// Public domain / CC0 video sources — used as fallback when API is unavailable
 const VIDEOS = {
   emergency: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4',
   fire:      'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
@@ -94,7 +126,7 @@ const VIDEOS = {
   ppe:       'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4',
 };
 
-const OHS_ITEMS = [
+const FALLBACK_ITEMS: OHSItem[] = [
   {
     id: 'emergency',
     label: 'Emergency\nProcedures',
@@ -205,7 +237,6 @@ const OHS_ITEMS = [
   },
 ];
 
-type OHSItem = typeof OHS_ITEMS[0];
 
 /* ─── Remote nav ─────────────────────────────────────────── */
 // Sections: 'cards' | 'back'
@@ -360,8 +391,12 @@ export default function OccupationalHealthSafetyScreen({
   isActive         = false,
 }: OHSScreenProps) {
 
+  const [items, setItems] = useState<OHSItem[]>(FALLBACK_ITEMS);
+  const itemsRef = useRef<OHSItem[]>(FALLBACK_ITEMS);
+  itemsRef.current = items;
+
   const [activeIdx,  setActiveIdx]  = useState(0);
-  const [focusIdx,   setFocusIdx]   = useState(0);   // 0-5 = cards, 6 = back
+  const [focusIdx,   setFocusIdx]   = useState(0);
   const [navSection, setNavSection] = useState<NavSection>('cards');
   const { date, time, temperature: headerTemp, weatherCondition: headerWeather } =
     useAppHeaderClock({
@@ -371,18 +406,111 @@ export default function OccupationalHealthSafetyScreen({
         : {}),
     });
 
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const isFullscreenRef   = useRef(false);
+  const lastFsToggleAtRef = useRef(0);
+  const visitKeyRef       = useRef(0);
+
+  const INITIAL_BOUNDS = { x: 0, y: 0, width: LEFT_W, height: Math.round(SH * 0.5) };
+  const [playerBounds, setPlayerBounds] = useState(INITIAL_BOUNDS);
+  const lastBoundsRef  = useRef(INITIAL_BOUNDS);
+  const [playerReady, setPlayerReady]   = useState(false);
+  const playerPaneRef  = useRef<View>(null);
+  const boundsRafRef   = useRef<number | null>(null);
+
   const activeIdxRef  = useRef(0);
   const focusIdxRef   = useRef(0);
   const navSectionRef = useRef<NavSection>('cards');
   const onBackRef     = useRef(onBack);
   onBackRef.current   = onBack;
 
+  const measurePlayerPane = useCallback(() => {
+    playerPaneRef.current?.measureInWindow((x, y, width, height) => {
+      if (width > 8 && height > 8) {
+        setPlayerReady(true);
+        const p = lastBoundsRef.current;
+        if (
+          Math.abs(x - p.x) >= 2 || Math.abs(y - p.y) >= 2 ||
+          Math.abs(width - p.width) >= 2 || Math.abs(height - p.height) >= 2
+        ) {
+          lastBoundsRef.current = { x, y, width, height };
+          setPlayerBounds({ x, y, width, height });
+        }
+      }
+    });
+  }, []);
+
+  const onPlayerPaneLayout = useCallback((_e: LayoutChangeEvent) => {
+    if (isFullscreen) return;
+    if (boundsRafRef.current != null) cancelAnimationFrame(boundsRafRef.current);
+    boundsRafRef.current = requestAnimationFrame(() => {
+      boundsRafRef.current = null;
+      measurePlayerPane();
+    });
+  }, [isFullscreen, measurePlayerPane]);
+
+  const tryToggleFullscreen = useCallback(() => {
+    const now = Date.now();
+    if (now - lastFsToggleAtRef.current < 400) return;
+    lastFsToggleAtRef.current = now;
+    const next = !isFullscreenRef.current;
+    isFullscreenRef.current = next;
+    setIsFullscreen(next);
+  }, []);
+
   useEffect(() => {
     if (isActive) {
+      visitKeyRef.current += 1;
       activeIdxRef.current  = 0; setActiveIdx(0);
       focusIdxRef.current   = 0; setFocusIdx(0);
       navSectionRef.current = 'cards'; setNavSection('cards');
+      isFullscreenRef.current = false; setIsFullscreen(false);
+      setPlayerReady(false);
+      lastBoundsRef.current = { x: -9999, y: -9999, width: 1, height: 1 };
+      requestAnimationFrame(() => requestAnimationFrame(measurePlayerPane));
+    } else {
+      isFullscreenRef.current = false; setIsFullscreen(false);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isActive]);
+
+  // Fetch real items from CMS when screen becomes active; fall back to static data.
+  useEffect(() => {
+    if (!isActive) return;
+    const ctrl = new AbortController();
+    fetchHealthSafetyItems(ctrl.signal)
+      .then(({ items: apiItems }) => {
+        if (ctrl.signal.aborted || apiItems.length === 0) return;
+        const mapped: OHSItem[] = apiItems.map((raw, i) => {
+          const videoUrl = String(raw.videoUrl ?? raw.video_url ?? raw.video ?? '');
+          return {
+            id:        String(raw.id ?? `ohs-${i}`),
+            label:     String(raw.label ?? splitLabel(String(raw.name ?? raw.title ?? ''))),
+            type:      toContentType(raw.type ?? raw.content_type),
+            icon:      String(raw.icon ?? raw.emoji ?? '📋'),
+            img:       String(raw.img ?? raw.image ?? raw.thumbnail ?? raw.image_url ?? raw.thumb ?? ''),
+            videoUrl,
+            hasVideo:  Boolean(raw.hasVideo ?? raw.has_video ?? !!videoUrl),
+            name:      String(raw.name ?? raw.title ?? ''),
+            desc:      String(raw.desc ?? raw.description ?? raw.body ?? ''),
+            contact:   String(raw.contact ?? raw.phone ?? ''),
+            highlight: String(raw.highlight ?? raw.callout ?? ''),
+            resources: Array.isArray(raw.resources)
+              ? raw.resources.map(r => ({
+                  label: String(r.label ?? r.name ?? ''),
+                  type:  toContentType(r.type ?? r.content_type),
+                }))
+              : [],
+          };
+        });
+        setItems(mapped);
+        // Reset selection to first item of new data
+        setActiveIdx(0); activeIdxRef.current = 0;
+        setFocusIdx(0);  focusIdxRef.current  = 0;
+      })
+      .catch(() => { /* keep fallback */ });
+    return () => ctrl.abort();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isActive]);
 
   const selectCard = useCallback((idx: number) => {
@@ -400,28 +528,43 @@ export default function OccupationalHealthSafetyScreen({
       const kc  = evt.keyCode;
       const sec = navSectionRef.current;
 
-      // BACK key
-      if (kc === 4) { onBackRef.current?.(); return; }
+      // BACK key — exit fullscreen first, then navigate away
+      if (kc === 4) {
+        if (isFullscreenRef.current) {
+          isFullscreenRef.current = false; setIsFullscreen(false);
+        } else {
+          onBackRef.current?.();
+        }
+        return;
+      }
+
+      // While fullscreen only OK exits it (BACK handled above)
+      if (isFullscreenRef.current) {
+        if (kc === 23 || kc === 66 || kc === 109) {
+          isFullscreenRef.current = false; setIsFullscreen(false);
+        }
+        return;
+      }
 
       if (sec === 'cards') {
         if (kc === 22) {
-          // RIGHT
-          const next = Math.min(5, focusIdxRef.current + 1);
+          const next = Math.min(itemsRef.current.length - 1, focusIdxRef.current + 1);
           focusIdxRef.current = next; setFocusIdx(next);
         } else if (kc === 21) {
-          // LEFT
           const next = Math.max(0, focusIdxRef.current - 1);
           focusIdxRef.current = next; setFocusIdx(next);
         } else if (kc === 20) {
-          // DOWN → back
           navSectionRef.current = 'back'; setNavSection('back');
         } else if (kc === 23 || kc === 66 || kc === 109) {
-          // OK → activate card
-          selectCard(focusIdxRef.current);
+          // OK on the already-active card → go fullscreen; otherwise select card
+          if (focusIdxRef.current === activeIdxRef.current) {
+            tryToggleFullscreen();
+          } else {
+            selectCard(focusIdxRef.current);
+          }
         }
       } else if (sec === 'back') {
         if (kc === 19) {
-          // UP → cards
           navSectionRef.current = 'cards'; setNavSection('cards');
         } else if (kc === 23 || kc === 66 || kc === 109) {
           onBackRef.current?.();
@@ -429,9 +572,9 @@ export default function OccupationalHealthSafetyScreen({
       }
     });
     return () => sub.remove();
-  }, [isActive, selectCard]);
+  }, [isActive, selectCard, tryToggleFullscreen]);
 
-  const activeItem = OHS_ITEMS[activeIdx];
+  const activeItem = items[activeIdx] ?? items[0] ?? FALLBACK_ITEMS[0];
 
   return (
     <View style={st.root}>
@@ -450,40 +593,35 @@ export default function OccupationalHealthSafetyScreen({
       {/* ── MAIN CONTENT ── */}
       <View style={st.main}>
 
-        {/* LEFT COLUMN: video + thumbnail strip */}
+        {/* LEFT COLUMN: video player + thumbnail cards stacked vertically */}
         <View style={st.leftCol}>
 
-          {/* ── VIDEO / HERO PLAYER ── */}
-          <View style={st.player}>
-            <VlcPlayer
-              key={`ohs-${activeItem.videoUrl}`}
-              uri={activeItem.videoUrl}
-              style={StyleSheet.absoluteFill as object}
-              paused={!isActive}
-            />
+          {/* ── VIDEO PLACEHOLDER (measures position for root-level player) ── */}
+          <View
+            ref={playerPaneRef}
+            onLayout={onPlayerPaneLayout}
+            collapsable={false}
+            style={st.player}
+          >
+            {!playerReady && (
+              <View style={[StyleSheet.absoluteFill, { backgroundColor: '#000', borderRadius: 8 }]} />
+            )}
 
-            {/* Subtle gradient top → transparent for readability */}
             <LinearGradient
               colors={['rgba(0,0,0,0.45)', 'transparent', 'rgba(0,0,0,0.55)']}
               locations={[0, 0.4, 1]}
               style={StyleSheet.absoluteFill}
               pointerEvents="none"
             />
-
-            {/* TOP-LEFT: section type pill + live pulse */}
             <View style={st.playerTopLeft}>
               <View style={st.playerLiveBadge}>
                 <PulseDot size={5} color={C.red} />
                 <Text style={st.playerLiveTxt}>OHS · {activeItem.type}</Text>
               </View>
             </View>
-
-            {/* TOP-RIGHT: play/pause hint */}
             <View style={st.playerTopRight}>
               <TypePill type={activeItem.type} />
             </View>
-
-            {/* BOTTOM: title overlay */}
             <LinearGradient
               colors={['transparent', 'rgba(6,6,12,0.92)']}
               style={st.playerBottom}
@@ -494,16 +632,21 @@ export default function OccupationalHealthSafetyScreen({
                 <Text style={st.playerTitle}>{activeItem.name}</Text>
                 <Text style={st.playerSubtitle} numberOfLines={1}>{activeItem.highlight}</Text>
               </View>
-              {/* Video indicator */}
               <View style={st.playerVideoTag}>
                 <Text style={st.playerVideoTagTxt}>▶  VIDEO</Text>
               </View>
             </LinearGradient>
+
+            {navSection === 'cards' && focusIdx === activeIdx && !isFullscreen && (
+              <View style={st.fsBadge} pointerEvents="none">
+                <Text style={st.fsBadgeTxt}>OK · Fullscreen</Text>
+              </View>
+            )}
           </View>
 
-          {/* ── THUMBNAIL STRIP ── */}
+          {/* ── THUMBNAIL STRIP (below player, detail panel spans full height on right) ── */}
           <View style={st.strip}>
-            {OHS_ITEMS.map((item, i) => (
+            {items.map((item, i) => (
               <ThumbCard
                 key={item.id}
                 item={item}
@@ -519,7 +662,7 @@ export default function OccupationalHealthSafetyScreen({
         {/* GAP */}
         <View style={{ width: 16 }} />
 
-        {/* RIGHT: detail panel */}
+        {/* RIGHT: detail panel — spans full height (alongside both player and strip) */}
         <DetailPanel item={activeItem} />
 
       </View>
@@ -533,6 +676,37 @@ export default function OccupationalHealthSafetyScreen({
         />
       </View>
 
+      {/* ── VIDEO PLAYER — root level so fullscreen can cover the whole screen ── */}
+      {isActive && (
+        <View
+          style={[
+            st.videoLayer,
+            isFullscreen
+              ? StyleSheet.absoluteFillObject
+              : {
+                  position: 'absolute',
+                  left: playerBounds.x,
+                  top: playerBounds.y,
+                  width: playerBounds.width,
+                  height: playerBounds.height,
+                  opacity: playerReady ? 1 : 0,
+                },
+          ]}
+        >
+          <VlcPlayer
+            key={`ohs-${activeItem.videoUrl}-${visitKeyRef.current}`}
+            uri={activeItem.videoUrl}
+            style={StyleSheet.absoluteFill as object}
+            paused={false}
+          />
+          {isFullscreen && (
+            <View style={st.fsExitBadge} pointerEvents="none">
+              <Text style={st.fsExitBadgeTxt}>OK / BACK · Exit fullscreen</Text>
+            </View>
+          )}
+        </View>
+      )}
+
     </View>
   );
 }
@@ -540,7 +714,38 @@ export default function OccupationalHealthSafetyScreen({
 /* ─── STYLES ─────────────────────────────────────────────── */
 const st = StyleSheet.create({
 
-  root: { flex: 1, backgroundColor: 'transparent' },
+  root: { flex: 1, backgroundColor: 'transparent', overflow: 'hidden' },
+
+  videoLayer: {
+    zIndex: 50,
+    backgroundColor: '#000',
+    overflow: 'hidden',
+    borderRadius: 8,
+  },
+
+  fsBadge: {
+    position: 'absolute', bottom: 10, right: 10,
+    backgroundColor: 'rgba(6,6,12,0.75)',
+    borderRadius: 3, paddingHorizontal: 10, paddingVertical: 5,
+    borderWidth: 1, borderColor: 'rgba(200,170,127,0.35)',
+  },
+  fsBadgeTxt: {
+    fontFamily: FontFamily.book,
+    color: 'rgba(200,170,127,0.8)',
+    fontSize: 9, letterSpacing: 1.5,
+  },
+
+  fsExitBadge: {
+    position: 'absolute', bottom: 24, right: 24,
+    backgroundColor: 'rgba(6,6,12,0.75)',
+    borderRadius: 3, paddingHorizontal: 12, paddingVertical: 7,
+    borderWidth: 1, borderColor: 'rgba(200,170,127,0.35)',
+  },
+  fsExitBadgeTxt: {
+    fontFamily: FontFamily.book,
+    color: 'rgba(200,170,127,0.8)',
+    fontSize: 10, letterSpacing: 1.5,
+  },
 
   headerTitleRow: {
     alignItems: 'center',
@@ -639,15 +844,16 @@ const st = StyleSheet.create({
     color: C.text,
   },
 
-  /* THUMBNAIL STRIP */
+  /* THUMBNAIL STRIP — inside leftCol, below the video player */
   strip: {
     flexDirection: 'row',
-    marginTop: 12,
     gap: 10,
     height: CARD_STRIP,
+    marginTop: 12,
   },
   thumb: {
-    flex: 1,
+    width: CARD_W,
+    flexShrink: 0,
     borderRadius: 6,
     overflow: 'hidden',
     borderWidth: 2,

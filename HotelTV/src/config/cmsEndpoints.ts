@@ -155,6 +155,11 @@ export function buildGetBackgroundImageApiUrl(): string {
   return `${getCmsHttpOrigin()}/api/get_background_image.php`;
 }
 
+/** Occupational Health & Safety items (`get_health_safety.php`). */
+export function buildGetHealthSafetyUrl(): string {
+  return `${getCmsHttpOrigin()}/api/get_health_safety.php`;
+}
+
 export const CMS_WS_URL = `ws://${CMS_HOST}:8765`;
 export const CMS_ALERT_POLL_URL = `${getCmsHttpOrigin()}/index.php?api=alert`;
 export const CMS_NOTIFICATIONS_REST_URL = `${getCmsHttpOrigin()}/index.php?api=notifications`;

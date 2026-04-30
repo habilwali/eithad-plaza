@@ -75,7 +75,6 @@ function AppContent(): React.JSX.Element {
   // Home mounts at FULL OPACITY from the start so when the splash fades out
   // the home is immediately visible — no blank flash, no double-opacity ghost.
   const [splashDone, setSplashDone] = useState(false);
-  const [heavyScreensReady, setHeavyScreensReady] = useState(false);
 
   // Start listeners immediately — data loads while splash is visible.
   useAlertListener(true);
@@ -88,29 +87,28 @@ function AppContent(): React.JSX.Element {
     'plaza' | 'health' | 'hypermarket' | 'notifications'
   >('welcome');
 
+  // Lazy-mount secondary screens: each mounts only the first time the user
+  // navigates to it, then stays mounted so back-navigation is instant.
+  // This avoids the post-splash JS spike of mounting all 8 screens at once.
+  const [mountedScreens, setMountedScreens] = useState<Set<string>>(new Set<string>());
+  const shouldMount = (name: string) => screen === name || mountedScreens.has(name);
+
+  useEffect(() => {
+    if (screen !== 'welcome') {
+      setMountedScreens(prev => {
+        if (prev.has(screen)) return prev;
+        const next = new Set(prev);
+        next.add(screen);
+        return next;
+      });
+    }
+  }, [screen]);
+
   useDiagnosticKeyLog();
 
-  // Unmount splash instantly — home is already at opacity=1 underneath so
-  // the transition is clean. A JS-driven fade risks the logo ghosting on slow TVs
-  // because the overlay stays mounted (at opacity~0) until the next JS re-render.
   const handleSplashFinish = React.useCallback(() => {
     setSplashDone(true);
   }, []);
-
-  // After splash fades, defer heavy secondary screens by 2 rAF.
-  useEffect(() => {
-    if (!splashDone) return;
-    let raf2: number | undefined;
-    const raf1 = requestAnimationFrame(() => {
-      raf2 = requestAnimationFrame(() => setHeavyScreensReady(true));
-    });
-    return () => {
-      cancelAnimationFrame(raf1);
-      if (raf2 != null) cancelAnimationFrame(raf2);
-    };
-  }, [splashDone]);
-
-  const mountSecondaryScreens = heavyScreensReady || screen !== 'welcome';
 
   const commonProps = {
     guestName: welcomeGuest.guestName,
@@ -162,61 +160,73 @@ function AppContent(): React.JSX.Element {
         />
       </AnimatedScreen>
 
-      {mountSecondaryScreens ? (
-        <>
-          <AnimatedScreen isActive={screen === 'health'}>
-            <OccupationalHealthSafetyScreen
-              {...commonProps}
-              isActive={screen === 'health'}
-              onBack={() => setScreen('welcome')}
-            />
-          </AnimatedScreen>
-          <AnimatedScreen isActive={screen === 'facilities'}>
-            <FacilitiesScreen
-              {...commonProps}
-              isActive={screen === 'facilities'}
-              backgroundImageSource={null}
-              onBack={() => setScreen('welcome')}
-            />
-          </AnimatedScreen>
-          <AnimatedScreen isActive={screen === 'channel'}>
-            <EtihadChannelScreen
-              isActive={screen === 'channel'}
-              onBack={() => setScreen('welcome')}
-            />
-          </AnimatedScreen>
-          <AnimatedScreen isActive={screen === 'etihadChannels'}>
-            <EtihadChannelsScreen
-              isActive={screen === 'etihadChannels'}
-              onBack={() => setScreen('welcome')}
-            />
-          </AnimatedScreen>
-          <AnimatedScreen isActive={screen === 'dining'}>
-            <EtihadDiningScreen
-              isActive={screen === 'dining'}
-              onBack={() => setScreen('welcome')}
-            />
-          </AnimatedScreen>
-          <AnimatedScreen isActive={screen === 'plaza'}>
-            <EtihadPlazaScreen
-              isActive={screen === 'plaza'}
-              onBack={() => setScreen('welcome')}
-            />
-          </AnimatedScreen>
-          <AnimatedScreen isActive={screen === 'hypermarket'}>
-            <EtihadHypermarketScreen
-              isActive={screen === 'hypermarket'}
-              onBack={() => setScreen('welcome')}
-            />
-          </AnimatedScreen>
-          <AnimatedScreen isActive={screen === 'notifications'}>
-            <NotificationScreen
-              isActive={screen === 'notifications'}
-              onBack={() => setScreen('welcome')}
-            />
-          </AnimatedScreen>
-        </>
-      ) : null}
+      {shouldMount('health') && (
+        <AnimatedScreen isActive={screen === 'health'}>
+          <OccupationalHealthSafetyScreen
+            {...commonProps}
+            isActive={screen === 'health'}
+            onBack={() => setScreen('welcome')}
+          />
+        </AnimatedScreen>
+      )}
+      {shouldMount('facilities') && (
+        <AnimatedScreen isActive={screen === 'facilities'}>
+          <FacilitiesScreen
+            {...commonProps}
+            isActive={screen === 'facilities'}
+            backgroundImageSource={null}
+            onBack={() => setScreen('welcome')}
+          />
+        </AnimatedScreen>
+      )}
+      {shouldMount('channel') && (
+        <AnimatedScreen isActive={screen === 'channel'}>
+          <EtihadChannelScreen
+            isActive={screen === 'channel'}
+            onBack={() => setScreen('welcome')}
+          />
+        </AnimatedScreen>
+      )}
+      {shouldMount('etihadChannels') && (
+        <AnimatedScreen isActive={screen === 'etihadChannels'}>
+          <EtihadChannelsScreen
+            isActive={screen === 'etihadChannels'}
+            onBack={() => setScreen('welcome')}
+          />
+        </AnimatedScreen>
+      )}
+      {shouldMount('dining') && (
+        <AnimatedScreen isActive={screen === 'dining'}>
+          <EtihadDiningScreen
+            isActive={screen === 'dining'}
+            onBack={() => setScreen('welcome')}
+          />
+        </AnimatedScreen>
+      )}
+      {shouldMount('plaza') && (
+        <AnimatedScreen isActive={screen === 'plaza'}>
+          <EtihadPlazaScreen
+            isActive={screen === 'plaza'}
+            onBack={() => setScreen('welcome')}
+          />
+        </AnimatedScreen>
+      )}
+      {shouldMount('hypermarket') && (
+        <AnimatedScreen isActive={screen === 'hypermarket'}>
+          <EtihadHypermarketScreen
+            isActive={screen === 'hypermarket'}
+            onBack={() => setScreen('welcome')}
+          />
+        </AnimatedScreen>
+      )}
+      {shouldMount('notifications') && (
+        <AnimatedScreen isActive={screen === 'notifications'}>
+          <NotificationScreen
+            isActive={screen === 'notifications'}
+            onBack={() => setScreen('welcome')}
+          />
+        </AnimatedScreen>
+      )}
 
       {/* Splash overlay — solid background, unmounts instantly when done so the logo
           can never ghost over the home content on slow TVs. */}
