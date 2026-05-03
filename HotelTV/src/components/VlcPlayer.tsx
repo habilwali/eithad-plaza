@@ -87,15 +87,15 @@ const VLC_INIT: readonly string[] = Object.freeze([
   '--avcodec-hw=any',
   // Fixed at 2 — avcodec-threads=0 (auto) causes native decoder init crashes on
   // some budget Amlogic/Realtek SoCs that miscalculate available core count.
-  '--avcodec-threads=2',
+  '--avcodec-threads=8',
   // Drop frames that arrive late instead of buffering them; prevents the decoder
   // queue from growing unbounded during UDP bursts and avoids OOM-induced crashes.
   '--drop-late-frames',
   '--skip-frames',
-  '--network-caching=2000',
-  '--live-caching=2000',
-  '--file-caching=2000',
-  '--clock-jitter=7000',
+  '--network-caching=1000',
+  // '--live-caching=1000',
+  // '--file-caching=2000',
+  // '--clock-jitter=2000',
   '--clock-synchro=0',
   '--audio-time-stretch',
   '--no-spu',
@@ -106,8 +106,32 @@ const MAX_RETRIES = 3;
 const RETRY_MS    = 2500;
 /** If `onLoad` never reports video size, stop covering the player after this (ms). */
 const VISUAL_READY_FALLBACK_MS = 1100;
+const DEFAULT_STREAM_URI = 'udp://@224.2.2.2:2000';
 
 type Status = 'loading' | 'playing' | 'reconnecting' | 'failed';
+
+function getSafeStreamUri(value: string | null | undefined): string {
+  if (typeof value !== 'string') {
+    return DEFAULT_STREAM_URI;
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed || /^(null|undefined|false)$/i.test(trimmed)) {
+    return DEFAULT_STREAM_URI;
+  }
+
+  // Native VLC can hard-crash on malformed source values, so never mount it
+  // with raw bad data. Use the default multicast stream instead.
+  if (/[\s\u0000-\u001F\u007F]/.test(trimmed)) {
+    return DEFAULT_STREAM_URI;
+  }
+
+  if (/^(udp|rtp|rtsp|http|https):\/\//i.test(trimmed)) {
+    return trimmed;
+  }
+
+  return DEFAULT_STREAM_URI;
+}
 
 function VlcPlayer({
   uri,
@@ -118,6 +142,7 @@ function VlcPlayer({
 }: VlcPlayerProps) {
   const [status,  setStatus]  = useState<Status>('loading');
   const [vlcKey,  setVlcKey]  = useState(0);
+  const safeUri = getSafeStreamUri(uri);
   /** True once we know the stream has a video track (or fallback elapsed) — hides overlay so picture shows. */
   const [visualReady, setVisualReady] = useState(false);
   const retriesRef     = useRef(0);
@@ -160,6 +185,11 @@ function VlcPlayer({
       visualFallbackRef.current = undefined;
     }
     retriesRef.current = 0;
+    if (!safeUri) {
+      setStatus('failed');
+      playerRef.current = null;
+      return;
+    }
     setStatus('loading');
 
     // Nullify the ref so stale callbacks from the old instance cannot fire after unmount.
@@ -167,7 +197,7 @@ function VlcPlayer({
 
     const id = setImmediate(() => setVlcKey(k => k + 1));
     return () => clearImmediate(id);
-  }, [uri]);
+  }, [safeUri]);
 
   useEffect(() => () => {
     clearTimeout(timerRef.current);
@@ -269,11 +299,11 @@ function VlcPlayer({
 
   return (
     <View style={[st.root, style, isFullscreen && st.fullscreen]}>
-      {!!uri && status !== 'failed' && (
+      {!!safeUri && status !== 'failed' && (
         <VLCPlayer
           ref={playerRef}
           key={`vlc-${vlcKey}`}
-          source={{ uri, initOptions: [...VLC_INIT] }}
+          source={{ uri: safeUri, initOptions: [...VLC_INIT] }}
           style={StyleSheet.absoluteFill}
           paused={paused || status === 'reconnecting'}
           repeat={false}
